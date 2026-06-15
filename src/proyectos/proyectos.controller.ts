@@ -11,13 +11,17 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ProyectosService } from './proyectos.service';
 import { CreateProyectoDto } from './dto/create-proyecto.dto';
 import { UpdateProyectoDto } from './dto/update-proyecto.dto';
 import { QueryProyectoDto } from './dto/query-proyecto.dto';
-import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 import { RequerimientosService } from '../requerimientos/requerimientos.service';
+
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
 import { CasosPruebaService } from '../casos-prueba/casos-prueba.service';
 
 @ApiTags('Proyectos')
@@ -50,18 +54,24 @@ export class ProyectosController {
   }
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Crear nuevo proyecto' })
   create(@Body() dto: CreateProyectoDto, @CurrentUser() user: Usuario) {
     return this.proyectosService.create(dto, user.id);
   }
 
   @Put(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Actualizar proyecto' })
   update(@Param('id') id: string, @Body() dto: UpdateProyectoDto) {
     return this.proyectosService.update(+id, dto);
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Eliminar proyecto' })
   remove(@Param('id') id: string) {
     return this.proyectosService.remove(+id);

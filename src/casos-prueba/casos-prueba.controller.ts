@@ -17,8 +17,12 @@ import { CreateCasoPruebaDto } from './dto/create-caso-prueba.dto';
 import { UpdateCasoPruebaDto } from './dto/update-caso-prueba.dto';
 import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
 import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
-import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 import { DefectosService } from '../defectos/defectos.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
 
 @ApiTags('Casos de Prueba')
 @ApiBearerAuth()
@@ -43,24 +47,32 @@ export class CasosPruebaController {
   }
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Crear nuevo caso de prueba' })
   create(@Body() dto: CreateCasoPruebaDto, @CurrentUser() user: Usuario) {
     return this.casosPruebaService.create(dto, user.id);
   }
 
   @Post('importar')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Importar casos de prueba desde Excel (bulk)' })
   importar(@Body() dto: ImportarCasosPruebaDto, @CurrentUser() user: Usuario) {
     return this.casosPruebaService.importar(dto, user.id);
   }
 
   @Put(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Actualizar caso de prueba' })
   update(@Param('id') id: string, @Body() dto: UpdateCasoPruebaDto) {
     return this.casosPruebaService.update(+id, dto);
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Eliminar caso de prueba' })
   remove(@Param('id') id: string) {
     return this.casosPruebaService.remove(+id);

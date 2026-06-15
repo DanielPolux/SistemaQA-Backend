@@ -46,6 +46,11 @@ export enum AmbienteDefecto {
   PRODUCCION = 'Producción',
 }
 
+export enum EstadoDesarrollo {
+  ATENDIDO = 'Atendido',
+  NO_APLICA = 'No Aplica',
+}
+
 @Entity('defectos')
 export class Defecto {
   @PrimaryGeneratedColumn()
@@ -121,6 +126,14 @@ export class Defecto {
 
   @Column({ name: 'fecha_resolucion', type: 'timestamp', nullable: true })
   fechaResolucion: Date;
+
+  @Column({
+    name: 'estado_desarrollo',
+    type: 'enum',
+    enum: EstadoDesarrollo,
+    nullable: true,
+  })
+  estadoDesarrollo: EstadoDesarrollo | null;
 
   @OneToMany(() => ComentarioDefecto, (c) => c.defecto)
   comentarios: ComentarioDefecto[];

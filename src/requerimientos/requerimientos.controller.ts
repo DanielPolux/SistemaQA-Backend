@@ -11,12 +11,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequerimientosService } from './requerimientos.service';
 import { CreateRequerimientoDto } from './dto/create-requerimiento.dto';
 import { UpdateRequerimientoDto } from './dto/update-requerimiento.dto';
 import { QueryRequerimientoDto } from './dto/query-requerimiento.dto';
-import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
+
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
 
 @ApiTags('Requerimientos')
 @ApiBearerAuth()
@@ -38,18 +42,24 @@ export class RequerimientosController {
   }
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Crear nuevo requerimiento' })
   create(@Body() dto: CreateRequerimientoDto, @CurrentUser() user: Usuario) {
     return this.requerimientosService.create(dto, user.id);
   }
 
   @Put(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Actualizar requerimiento' })
   update(@Param('id') id: string, @Body() dto: UpdateRequerimientoDto) {
     return this.requerimientosService.update(+id, dto);
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Eliminar requerimiento' })
   remove(@Param('id') id: string) {
     return this.requerimientosService.remove(+id);

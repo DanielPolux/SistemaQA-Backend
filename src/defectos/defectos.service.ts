@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Defecto, EstadoDefecto } from './entities/defecto.entity';
+import { Defecto, EstadoDefecto, EstadoDesarrollo } from './entities/defecto.entity';
 import { ComentarioDefecto } from './entities/comentario-defecto.entity';
 import { CreateDefectoDto } from './dto/create-defecto.dto';
 import { UpdateDefectoDto } from './dto/update-defecto.dto';
@@ -140,6 +140,13 @@ export class DefectosService {
       comentario: dto.comentario,
     });
     return this.comentariosRepo.save(comentario);
+  }
+
+  async actualizarEstadoDesarrollo(id: number, estadoDesarrollo: EstadoDesarrollo): Promise<Defecto> {
+    const defecto = await this.defectosRepo.findOne({ where: { id } });
+    if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
+    defecto.estadoDesarrollo = estadoDesarrollo;
+    return this.defectosRepo.save(defecto);
   }
 
   async remove(id: number): Promise<void> {
