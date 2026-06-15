@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { DefectosController } from './defectos.controller';
+import { DefectosService } from './defectos.service';
+import { Defecto } from './entities/defecto.entity';
+import { ComentarioDefecto } from './entities/comentario-defecto.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Defecto, ComentarioDefecto])],
+  controllers: [DefectosController],
+  providers: [DefectosService],
+  exports: [DefectosService],
+})
+export class DefectosModule {}

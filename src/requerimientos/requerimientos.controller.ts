@@ -1,0 +1,57 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequerimientosService } from './requerimientos.service';
+import { CreateRequerimientoDto } from './dto/create-requerimiento.dto';
+import { UpdateRequerimientoDto } from './dto/update-requerimiento.dto';
+import { QueryRequerimientoDto } from './dto/query-requerimiento.dto';
+import { Usuario } from '../usuarios/entities/usuario.entity';
+
+@ApiTags('Requerimientos')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('requerimientos')
+export class RequerimientosController {
+  constructor(private readonly requerimientosService: RequerimientosService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Listar requerimientos con filtros y paginación' })
+  findAll(@Query() query: QueryRequerimientoDto) {
+    return this.requerimientosService.findAll(query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Obtener requerimiento por ID' })
+  findOne(@Param('id') id: string) {
+    return this.requerimientosService.findOne(+id);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Crear nuevo requerimiento' })
+  create(@Body() dto: CreateRequerimientoDto, @CurrentUser() user: Usuario) {
+    return this.requerimientosService.create(dto, user.id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Actualizar requerimiento' })
+  update(@Param('id') id: string, @Body() dto: UpdateRequerimientoDto) {
+    return this.requerimientosService.update(+id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar requerimiento' })
+  remove(@Param('id') id: string) {
+    return this.requerimientosService.remove(+id);
+  }
+}
