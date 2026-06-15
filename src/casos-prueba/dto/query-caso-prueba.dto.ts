@@ -3,6 +3,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EstadoCasoPrueba,
   PrioridadCasoPrueba,
+  ResultadoCasoPrueba,
   TipoCasoPrueba,
 } from '../entities/caso-prueba.entity';
 
@@ -17,12 +18,17 @@ export class QueryCasoPruebaDto {
   @IsNumberString()
   requerimientoId?: number;
 
-  @ApiPropertyOptional({ enum: EstadoCasoPrueba })
+  @ApiPropertyOptional({ enum: EstadoCasoPrueba, description: 'Estado QA' })
   @IsOptional()
   @IsEnum(EstadoCasoPrueba)
   estado?: EstadoCasoPrueba;
 
-  @ApiPropertyOptional({ enum: TipoCasoPrueba })
+  @ApiPropertyOptional({ enum: ResultadoCasoPrueba, description: 'Resultado de ejecución' })
+  @IsOptional()
+  @IsEnum(ResultadoCasoPrueba)
+  resultado?: ResultadoCasoPrueba;
+
+  @ApiPropertyOptional({ enum: TipoCasoPrueba, description: 'Tipo de Prueba' })
   @IsOptional()
   @IsEnum(TipoCasoPrueba)
   tipo?: TipoCasoPrueba;
@@ -32,12 +38,12 @@ export class QueryCasoPruebaDto {
   @IsEnum(PrioridadCasoPrueba)
   prioridad?: PrioridadCasoPrueba;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Filtrar por ID del Responsable QA' })
   @IsOptional()
   @IsNumberString()
-  asignadoA?: number;
+  responsableQaId?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Búsqueda por nombre o código CP' })
   @IsOptional()
   @IsString()
   busqueda?: string;

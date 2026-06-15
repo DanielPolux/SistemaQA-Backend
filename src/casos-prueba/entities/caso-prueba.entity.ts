@@ -12,28 +12,35 @@ import { Requerimiento } from '../../requerimientos/entities/requerimiento.entit
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
 export enum TipoCasoPrueba {
-  FUNCIONAL = 'Funcional',
-  REGRESION = 'Regresión',
-  HUMO = 'Humo',
-  INTEGRACION = 'Integración',
-  RENDIMIENTO = 'Rendimiento',
-  SEGURIDAD = 'Seguridad',
-  USABILIDAD = 'Usabilidad',
+  FUNCIONAL    = 'Funcional',
+  REGRESION    = 'Regresión',
+  HUMO         = 'Humo',
+  INTEGRACION  = 'Integración',
+  RENDIMIENTO  = 'Rendimiento',
+  SEGURIDAD    = 'Seguridad',
+  USABILIDAD   = 'Usabilidad',
 }
 
 export enum PrioridadCasoPrueba {
-  ALTA = 'Alta',
+  ALTA  = 'Alta',
   MEDIA = 'Media',
-  BAJA = 'Baja',
+  BAJA  = 'Baja',
 }
 
 export enum EstadoCasoPrueba {
-  PENDIENTE = 'Pendiente',
+  PENDIENTE    = 'Pendiente',
   EN_EJECUCION = 'En Ejecución',
-  APROBADO = 'Aprobado',
-  FALLIDO = 'Fallido',
-  BLOQUEADO = 'Bloqueado',
-  OMITIDO = 'Omitido',
+  EJECUTADO    = 'Ejecutado',
+  BLOQUEADO    = 'Bloqueado',
+  OMITIDO      = 'Omitido',
+}
+
+export enum ResultadoCasoPrueba {
+  SIN_EJECUTAR = 'Sin Ejecutar',
+  APROBADO     = 'Aprobado',
+  FALLIDO      = 'Fallido',
+  BLOQUEADO    = 'Bloqueado',
+  OMITIDO      = 'Omitido',
 }
 
 @Entity('casos_prueba')
@@ -41,6 +48,15 @@ export class CasoPrueba {
   @PrimaryGeneratedColumn()
   id: number;
 
+  /** Código del caso de prueba (SharePoint: "Codigo CP") */
+  @Column({ name: 'codigo_cp', unique: true, nullable: true, length: 30 })
+  codigo: string;
+
+  /** Nombre descriptivo del caso (SharePoint: "Nombre del Caso de Prueba") */
+  @Column({ length: 300 })
+  nombre: string;
+
+  /** Proyecto al que pertenece (SharePoint: "Proyecto" - Búsqueda) */
   @Column({ name: 'proyecto_id' })
   proyectoId: number;
 
@@ -48,46 +64,74 @@ export class CasoPrueba {
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: Proyecto;
 
+  /** Clave corta del proyecto (SharePoint: "ClaveProyecto") */
+  @Column({ name: 'clave_proyecto', nullable: true, length: 50 })
+  claveProyecto: string;
+
+  /** Tipo de prueba (SharePoint: "Tipo de Prueba" - Elección) */
+  @Column({ type: 'enum', enum: TipoCasoPrueba })
+  tipo: TipoCasoPrueba;
+
+  /** Descripción del caso (SharePoint: "Descripción del Caso de Prueba") */
+  @Column({ type: 'text' })
+  descripcion: string;
+
+  /** Prioridad (SharePoint: "Prioridad" - Elección) */
+  @Column({ type: 'enum', enum: PrioridadCasoPrueba })
+  prioridad: PrioridadCasoPrueba;
+
+  /** Estado actual del caso de prueba (SharePoint: "Estado QA" - Elección) */
+  @Column({ type: 'enum', enum: EstadoCasoPrueba, default: EstadoCasoPrueba.PENDIENTE })
+  estado: EstadoCasoPrueba;
+
+  /** Resultado de la ejecución (SharePoint: "Resultado" - Elección) */
+  @Column({
+    type: 'enum',
+    enum: ResultadoCasoPrueba,
+    default: ResultadoCasoPrueba.SIN_EJECUTAR,
+    nullable: true,
+  })
+  resultado: ResultadoCasoPrueba;
+
+  /** Resultado esperado (SharePoint: "Resultado Esperado") */
+  @Column({ name: 'resultado_esperado', type: 'text' })
+  resultadoEsperado: string;
+
+  /** Responsable de ejecutar el caso (SharePoint: "Responsable QA") */
+  @Column({ name: 'responsable_qa_id', nullable: true })
+  responsableQaId: number;
+
+  @ManyToOne(() => Usuario, { eager: false, nullable: true })
+  @JoinColumn({ name: 'responsable_qa_id' })
+  responsableQa: Usuario;
+
+  /** Fecha en que se ejecutó el caso (SharePoint: "Fecha Ejecución") */
+  @Column({ name: 'fecha_ejecucion', type: 'timestamptz', nullable: true })
+  fechaEjecucion: Date;
+
+  /** URL de evidencia de ejecución (SharePoint: "Evidencia") */
+  @Column({ name: 'evidencia_url', nullable: true, length: 500 })
+  evidenciaUrl: string;
+
+  /** Observaciones adicionales (SharePoint: "Observaciones") */
+  @Column({ type: 'text', nullable: true })
+  observaciones: string;
+
+  /** Pasos de prueba estructurados (SharePoint: "Pasos de Prueba") */
+  @Column({ type: 'jsonb', default: '[]' })
+  pasos: { orden: number; descripcion: string; resultadoEsperado: string }[];
+
+  /** Código texto del requerimiento RF (SharePoint: "Requerimiento RF") */
+  @Column({ name: 'requerimiento_rf', nullable: true, length: 50 })
+  requerimientoRf: string;
+
+  /** Relación con requerimiento (SharePoint: "RF" - Búsqueda) */
   @Column({ name: 'requerimiento_id', nullable: true })
   requerimientoId: number;
 
   @ManyToOne(() => Requerimiento, { eager: false, nullable: true })
   @JoinColumn({ name: 'requerimiento_id' })
   requerimiento: Requerimiento;
-
-  @Column({ unique: true, length: 30 })
-  codigo: string;
-
-  @Column({ length: 300 })
-  titulo: string;
-
-  @Column({ type: 'text', nullable: true })
-  descripcion: string;
-
-  @Column({ type: 'text', nullable: true })
-  precondiciones: string;
-
-  @Column({ type: 'jsonb', default: '[]' })
-  pasos: { orden: number; descripcion: string; resultadoEsperado: string }[];
-
-  @Column({ name: 'resultado_esperado', type: 'text' })
-  resultadoEsperado: string;
-
-  @Column({ type: 'enum', enum: TipoCasoPrueba })
-  tipo: TipoCasoPrueba;
-
-  @Column({ type: 'enum', enum: PrioridadCasoPrueba })
-  prioridad: PrioridadCasoPrueba;
-
-  @Column({ type: 'enum', enum: EstadoCasoPrueba, default: EstadoCasoPrueba.PENDIENTE })
-  estado: EstadoCasoPrueba;
-
-  @Column({ name: 'asignado_a', nullable: true })
-  asignadoA: number;
-
-  @ManyToOne(() => Usuario, { eager: false, nullable: true })
-  @JoinColumn({ name: 'asignado_a' })
-  asignado: Usuario;
 
   @Column({ name: 'creado_por' })
   creadoPor: number;

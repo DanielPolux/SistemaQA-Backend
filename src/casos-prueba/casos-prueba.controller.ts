@@ -16,6 +16,7 @@ import { CasosPruebaService } from './casos-prueba.service';
 import { CreateCasoPruebaDto } from './dto/create-caso-prueba.dto';
 import { UpdateCasoPruebaDto } from './dto/update-caso-prueba.dto';
 import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
+import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { DefectosService } from '../defectos/defectos.service';
 
@@ -45,6 +46,12 @@ export class CasosPruebaController {
   @ApiOperation({ summary: 'Crear nuevo caso de prueba' })
   create(@Body() dto: CreateCasoPruebaDto, @CurrentUser() user: Usuario) {
     return this.casosPruebaService.create(dto, user.id);
+  }
+
+  @Post('importar')
+  @ApiOperation({ summary: 'Importar casos de prueba desde Excel (bulk)' })
+  importar(@Body() dto: ImportarCasosPruebaDto, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.importar(dto, user.id);
   }
 
   @Put(':id')

@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsDateString,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -12,75 +13,107 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EstadoCasoPrueba,
   PrioridadCasoPrueba,
+  ResultadoCasoPrueba,
   TipoCasoPrueba,
 } from '../entities/caso-prueba.entity';
 
 class PasoDto {
+  @ApiProperty()
   @IsNumber()
   orden: number;
 
+  @ApiProperty()
   @IsString()
   descripcion: string;
 
+  @ApiProperty()
   @IsString()
   resultadoEsperado: string;
 }
 
 export class CreateCasoPruebaDto {
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Código del caso de prueba (Codigo CP)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  codigo?: string;
+
+  @ApiProperty({ description: 'Nombre del Caso de Prueba' })
+  @IsString()
+  @MaxLength(300)
+  nombre: string;
+
+  @ApiProperty({ description: 'ID del proyecto (Búsqueda)' })
   @IsNumber()
   proyectoId: number;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  requerimientoId?: number;
-
-  @ApiProperty()
-  @IsString()
-  @MaxLength(30)
-  codigo: string;
-
-  @ApiProperty()
-  @IsString()
-  @MaxLength(300)
-  titulo: string;
-
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Clave corta del proyecto (ClaveProyecto)' })
   @IsOptional()
   @IsString()
-  descripcion?: string;
+  @MaxLength(50)
+  claveProyecto?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  precondiciones?: string;
-
-  @ApiProperty({ type: [PasoDto] })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PasoDto)
-  pasos: PasoDto[];
-
-  @ApiProperty()
-  @IsString()
-  resultadoEsperado: string;
-
-  @ApiProperty({ enum: TipoCasoPrueba })
+  @ApiProperty({ enum: TipoCasoPrueba, description: 'Tipo de Prueba' })
   @IsEnum(TipoCasoPrueba)
   tipo: TipoCasoPrueba;
+
+  @ApiProperty({ description: 'Descripción del Caso de Prueba' })
+  @IsString()
+  descripcion: string;
 
   @ApiProperty({ enum: PrioridadCasoPrueba })
   @IsEnum(PrioridadCasoPrueba)
   prioridad: PrioridadCasoPrueba;
 
-  @ApiPropertyOptional({ enum: EstadoCasoPrueba })
+  @ApiPropertyOptional({ enum: EstadoCasoPrueba, description: 'Estado QA' })
   @IsOptional()
   @IsEnum(EstadoCasoPrueba)
   estado?: EstadoCasoPrueba;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: ResultadoCasoPrueba, description: 'Resultado de la ejecución' })
+  @IsOptional()
+  @IsEnum(ResultadoCasoPrueba)
+  resultado?: ResultadoCasoPrueba;
+
+  @ApiProperty({ description: 'Resultado Esperado' })
+  @IsString()
+  resultadoEsperado: string;
+
+  @ApiPropertyOptional({ description: 'ID del Responsable QA' })
   @IsOptional()
   @IsNumber()
-  asignadoA?: number;
+  responsableQaId?: number;
+
+  @ApiPropertyOptional({ description: 'Fecha de Ejecución' })
+  @IsOptional()
+  @IsDateString()
+  fechaEjecucion?: Date;
+
+  @ApiPropertyOptional({ description: 'URL de evidencia de ejecución' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  evidenciaUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Observaciones adicionales' })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+
+  @ApiProperty({ description: 'Pasos de Prueba (estructurados)', type: [PasoDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PasoDto)
+  pasos: PasoDto[];
+
+  @ApiPropertyOptional({ description: 'Código texto del Requerimiento RF' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  requerimientoRf?: string;
+
+  @ApiPropertyOptional({ description: 'ID del Requerimiento (RF - Búsqueda)' })
+  @IsOptional()
+  @IsNumber()
+  requerimientoId?: number;
 }

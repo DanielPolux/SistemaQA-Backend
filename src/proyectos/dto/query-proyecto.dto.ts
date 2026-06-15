@@ -8,12 +8,27 @@ export class QueryProyectoDto {
   @IsEnum(EstadoProyecto)
   estado?: EstadoProyecto;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Filtrar por ID de jefe de proyecto' })
   @IsOptional()
   @IsNumberString()
-  responsableId?: number;
+  jefeProyectoId?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Filtrar por ID de jefe de QA' })
+  @IsOptional()
+  @IsNumberString()
+  jefeQaId?: number;
+
+  @ApiPropertyOptional({ description: 'Filtrar por ID de responsable de QA' })
+  @IsOptional()
+  @IsNumberString()
+  responsableQaId?: number;
+
+  @ApiPropertyOptional({ description: 'Filtrar por cliente' })
+  @IsOptional()
+  @IsString()
+  cliente?: string;
+
+  @ApiPropertyOptional({ description: 'Búsqueda por nombre, código o sistema' })
   @IsOptional()
   @IsString()
   busqueda?: string;
