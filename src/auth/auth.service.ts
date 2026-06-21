@@ -15,9 +15,12 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto) {
-    const usuario = await this.usuariosRepository.findOne({
-      where: { email: loginDto.email, activo: true },
-    });
+    const usuario = await this.usuariosRepository
+      .createQueryBuilder('u')
+      .addSelect('u.password')
+      .where('u.email = :email', { email: loginDto.email })
+      .andWhere('u.activo = :activo', { activo: true })
+      .getOne();
 
     if (!usuario) throw new UnauthorizedException('Credenciales inválidas');
 

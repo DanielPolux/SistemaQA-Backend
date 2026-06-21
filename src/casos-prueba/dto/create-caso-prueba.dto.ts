@@ -32,18 +32,13 @@ class PasoDto {
 }
 
 export class CreateCasoPruebaDto {
-  @ApiPropertyOptional({ description: 'Código del caso de prueba (Codigo CP)' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  codigo?: string;
-
   @ApiProperty({ description: 'Nombre del Caso de Prueba' })
   @IsString()
   @MaxLength(300)
   nombre: string;
 
   @ApiProperty({ description: 'ID del proyecto (Búsqueda)' })
+  @Type(() => Number)
   @IsNumber()
   proyectoId: number;
 
@@ -81,6 +76,7 @@ export class CreateCasoPruebaDto {
 
   @ApiPropertyOptional({ description: 'ID del Responsable QA' })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   responsableQaId?: number;
 
@@ -114,6 +110,7 @@ export class CreateCasoPruebaDto {
 
   @ApiPropertyOptional({ description: 'ID del Requerimiento (RF - Búsqueda)' })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   requerimientoId?: number;
 }

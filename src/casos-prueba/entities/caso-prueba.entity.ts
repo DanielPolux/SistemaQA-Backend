@@ -48,8 +48,8 @@ export class CasoPrueba {
   @PrimaryGeneratedColumn()
   id: number;
 
-  /** Código del caso de prueba (SharePoint: "Codigo CP") */
-  @Column({ name: 'codigo_cp', unique: true, nullable: true, length: 30 })
+  /** Código del caso de prueba (SharePoint: "Codigo CP") — único por proyecto, auto-generado */
+  @Column({ name: 'codigo_cp', nullable: true, length: 30 })
   codigo: string;
 
   /** Nombre descriptivo del caso (SharePoint: "Nombre del Caso de Prueba") */

@@ -1,0 +1,62 @@
+import {
+  IsArray, IsDateString, IsNotEmpty, IsNumber,
+  IsOptional, IsString, MaxLength,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreatePlanPruebaDto {
+  @Type(() => Number)
+  @IsNumber()
+  proyectoId: number;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  nombre: string;
+
+  @IsOptional()
+  @IsString()
+  descripcion?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  objetivo: string;
+
+  @IsOptional()
+  @IsString()
+  alcance?: string;
+
+  @IsOptional()
+  @IsString()
+  fueraAlcance?: string;
+
+  @IsOptional()
+  @IsString()
+  criteriosEntrada?: string;
+
+  @IsOptional()
+  @IsString()
+  criteriosSalida?: string;
+
+  @IsOptional()
+  @IsString()
+  riesgos?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  responsableId?: number;
+
+  @IsOptional()
+  @IsDateString()
+  fechaInicio?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaObjetivo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  requerimientoIds?: number[];
+}

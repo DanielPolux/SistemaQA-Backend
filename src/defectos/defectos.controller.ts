@@ -24,7 +24,14 @@ import { CambiarEstadoDesarrolloDto } from './dto/cambiar-estado-desarrollo.dto'
 import { CreateComentarioDto } from './dto/create-comentario.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
-const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
+// Solo QA puede reportar (crear) defectos
+const ROLES_CREAR      = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
+// QA y PM pueden editar defectos (PM para asignar desarrollador)
+const ROLES_EDITAR     = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
+// Todos pueden cambiar el estado del defecto (cerrar, reabrir, etc.)
+const ROLES_ESTADO     = [Rol.ADMIN, Rol.PROJECT_MANAGER, Rol.DEVELOPER, Rol.QA_LEAD, Rol.QA_TESTER];
+// Solo el desarrollador (y admin) actualiza el estado de desarrollo (Atendido/No Aplica)
+const ROLES_ESTADO_DEV = [Rol.ADMIN, Rol.DEVELOPER];
 
 @ApiTags('Defectos')
 @ApiBearerAuth()
@@ -39,6 +46,12 @@ export class DefectosController {
     return this.defectosService.findAll(query);
   }
 
+  @Get('siguiente-codigo/:proyectoId')
+  @ApiOperation({ summary: 'Obtener el siguiente código de defecto para un proyecto' })
+  getSiguienteCodigo(@Param('proyectoId') proyectoId: string) {
+    return this.defectosService.getSiguienteCodigoProyecto(+proyectoId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener defecto por ID (incluye comentarios)' })
   findOne(@Param('id') id: string) {
@@ -47,39 +60,44 @@ export class DefectosController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
+  @Roles(...ROLES_CREAR)
   @ApiOperation({ summary: 'Crear nuevo defecto' })
   create(@Body() dto: CreateDefectoDto, @CurrentUser() user: Usuario) {
-    return this.defectosService.create(dto, user.id);
+    return this.defectosService.create(dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Put(':id')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
+  @Roles(...ROLES_EDITAR)
   @ApiOperation({ summary: 'Actualizar defecto' })
-  update(@Param('id') id: string, @Body() dto: UpdateDefectoDto) {
-    return this.defectosService.update(+id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateDefectoDto, @CurrentUser() user: Usuario) {
+    return this.defectosService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Patch(':id/estado')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
+  @Roles(...ROLES_ESTADO)
   @ApiOperation({ summary: 'Cambiar estado del defecto' })
   cambiarEstado(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoDto,
     @CurrentUser() user: Usuario,
   ) {
-    return this.defectosService.cambiarEstado(+id, dto, user.id);
+    return this.defectosService.cambiarEstado(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Patch(':id/estado-desarrollo')
-  @ApiOperation({ summary: 'Actualizar estado de desarrollo (Desarrollador)' })
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESTADO_DEV)
+  @ApiOperation({ summary: 'Actualizar estado de desarrollo (solo Desarrollador)' })
   actualizarEstadoDesarrollo(
     @Param('id') id: string,
     @Body() dto: CambiarEstadoDesarrolloDto,
+    @CurrentUser() user: Usuario,
   ) {
-    return this.defectosService.actualizarEstadoDesarrollo(+id, dto.estadoDesarrollo);
+    return this.defectosService.actualizarEstadoDesarrollo(
+      +id, dto.estadoDesarrollo, dto.comentariosDesarrollo, user.id, `${user.nombre} ${user.apellido}`,
+    );
   }
 
   @Post(':id/comentarios')
@@ -94,7 +112,7 @@ export class DefectosController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
+  @Roles(...ROLES_EDITAR)
   @ApiOperation({ summary: 'Eliminar defecto' })
   remove(@Param('id') id: string) {
     return this.defectosService.remove(+id);

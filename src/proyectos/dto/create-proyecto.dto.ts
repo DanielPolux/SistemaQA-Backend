@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EstadoProyecto } from '../entities/proyecto.entity';
 
@@ -29,14 +30,15 @@ export class CreateProyectoDto {
   @MaxLength(200)
   cliente: string;
 
-  @ApiPropertyOptional({ description: 'Código corto único (ej: PWC-2024)' })
+  @ApiPropertyOptional({ description: 'Código corto único (ej: PWC-24), máximo 10 caracteres' })
   @IsOptional()
   @IsString()
-  @MaxLength(20)
+  @MaxLength(10)
   codigo?: string;
 
   @ApiPropertyOptional({ description: 'ID del responsable de QA' })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   responsableQaId?: number;
 
@@ -44,11 +46,6 @@ export class CreateProyectoDto {
   @IsOptional()
   @IsEnum(EstadoProyecto)
   estado?: EstadoProyecto;
-
-  @ApiPropertyOptional({ description: 'Número de iteración o sprint' })
-  @IsOptional()
-  @IsNumber()
-  iteracion?: number;
 
   @ApiPropertyOptional({ description: 'Fecha de inicio planificada (YYYY-MM-DD)' })
   @IsOptional()
@@ -72,6 +69,7 @@ export class CreateProyectoDto {
 
   @ApiPropertyOptional({ description: 'Porcentaje de avance (0-100)', default: 0 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(100)
@@ -82,6 +80,12 @@ export class CreateProyectoDto {
   @IsString()
   @MaxLength(500)
   repositorioUrl?: string;
+
+  @ApiPropertyOptional({ description: 'URL del documento de estimación / planificación' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  documentoUrl?: string;
 
   @ApiPropertyOptional({ description: 'Notas y observaciones' })
   @IsOptional()
@@ -95,6 +99,7 @@ export class CreateProyectoDto {
   sistema?: string;
 
   @ApiProperty({ description: 'ID del jefe de proyecto' })
+  @Type(() => Number)
   @IsNumber()
   jefeProyectoId: number;
 
@@ -105,11 +110,13 @@ export class CreateProyectoDto {
 
   @ApiPropertyOptional({ description: 'Horas de QA estimadas o consumidas' })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   horasQa?: number;
 
   @ApiProperty({ description: 'ID del jefe de QA' })
+  @Type(() => Number)
   @IsNumber()
   jefeQaId: number;
 }

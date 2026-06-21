@@ -7,14 +7,9 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { UsuarioRol } from './usuario-rol.entity';
+import { Rol } from './roles.enum';
 
-export enum Rol {
-  ADMIN = 'Administrador',
-  QA_LEAD = 'QA Lead',
-  QA_TESTER = 'QA Tester',
-  DEVELOPER = 'Desarrollador',
-  PROJECT_MANAGER = 'Project Manager',
-}
+export { Rol };
 
 @Entity('usuarios')
 export class Usuario {

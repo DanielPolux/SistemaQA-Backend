@@ -39,6 +39,11 @@ export class QueryDefectoDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsNumberString()
+  reportadoPor?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   busqueda?: string;
 

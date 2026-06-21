@@ -45,7 +45,7 @@ export class Requerimiento {
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: Proyecto;
 
-  @Column({ unique: true, length: 30 })
+  @Column({ nullable: true, length: 30 })
   codigo: string;
 
   @Column({ length: 300 })

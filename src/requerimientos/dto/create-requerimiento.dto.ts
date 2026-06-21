@@ -1,4 +1,5 @@
 import { IsEnum, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EstadoRequerimiento,
@@ -8,13 +9,15 @@ import {
 
 export class CreateRequerimientoDto {
   @ApiProperty()
+  @Type(() => Number)
   @IsNumber()
   proyectoId: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   @MaxLength(30)
-  codigo: string;
+  codigo?: string;
 
   @ApiProperty()
   @IsString()

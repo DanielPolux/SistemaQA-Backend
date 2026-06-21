@@ -9,12 +9,22 @@ import {
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+export interface DocumentoRequerimiento {
+  itemId: string;
+  nombre: string;
+  url: string;
+  tamano: number;
+  subidoEn: string;
+}
+
 export enum EstadoProyecto {
-  PLANIFICADO  = 'Planificado',
-  EN_EJECUCION = 'En Ejecución',
-  EN_PAUSA     = 'En Pausa',
-  COMPLETADO   = 'Completado',
-  CANCELADO    = 'Cancelado',
+  POR_ESTIMAR   = 'Por estimar',
+  ESTIMADO      = 'Estimado',
+  OBSERVADO     = 'Observado',
+  PLANIFICADO   = 'Planificado',
+  EN_EJECUCION  = 'En Ejecución',
+  FINALIZADO    = 'Finalizado',
+  EN_PRODUCCION = 'En Produccion',
 }
 
 @Entity('proyectos')
@@ -35,7 +45,7 @@ export class Proyecto {
   cliente: string;
 
   /** Código interno único (uso del sistema) */
-  @Column({ unique: true, length: 20, nullable: true })
+  @Column({ unique: true, length: 10, nullable: true })
   codigo: string;
 
   /** Responsable de QA del proyecto (SharePoint: "Responsable QA") */
@@ -49,10 +59,6 @@ export class Proyecto {
   /** Estado del proyecto */
   @Column({ type: 'enum', enum: EstadoProyecto, default: EstadoProyecto.PLANIFICADO })
   estado: EstadoProyecto;
-
-  /** Número de iteración / sprint */
-  @Column({ nullable: true, type: 'int' })
-  iteracion: number;
 
   /** Fecha de inicio planificada */
   @Column({ name: 'fecha_inicio_planificada', type: 'date', nullable: true })
@@ -83,6 +89,14 @@ export class Proyecto {
   /** URL del repositorio de código */
   @Column({ name: 'repositorio_url', nullable: true, length: 500 })
   repositorioUrl: string;
+
+  /** URL del documento de estimación / planificación (Excel compartido) */
+  @Column({ name: 'documento_url', nullable: true, length: 500 })
+  documentoUrl: string;
+
+  /** Documentos de requerimientos almacenados en SharePoint */
+  @Column({ name: 'documentos_requerimientos', type: 'jsonb', nullable: true, default: [] })
+  documentosRequerimientos: DocumentoRequerimiento[];
 
   /** Notas y observaciones generales */
   @Column({ type: 'text', nullable: true })

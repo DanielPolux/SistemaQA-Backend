@@ -22,7 +22,7 @@ import { DefectosService } from '../defectos/defectos.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
-const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 
 @ApiTags('Casos de Prueba')
 @ApiBearerAuth()
@@ -40,6 +40,12 @@ export class CasosPruebaController {
     return this.casosPruebaService.findAll(query);
   }
 
+  @Get('next-codigo')
+  @ApiOperation({ summary: 'Previsualizar el próximo código CP para un proyecto' })
+  nextCodigo(@Query('proyectoId') proyectoId: string) {
+    return this.casosPruebaService.nextCodigo(+proyectoId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener caso de prueba por ID' })
   findOne(@Param('id') id: string) {
@@ -51,7 +57,7 @@ export class CasosPruebaController {
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Crear nuevo caso de prueba' })
   create(@Body() dto: CreateCasoPruebaDto, @CurrentUser() user: Usuario) {
-    return this.casosPruebaService.create(dto, user.id);
+    return this.casosPruebaService.create(dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Post('importar')
@@ -59,15 +65,15 @@ export class CasosPruebaController {
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Importar casos de prueba desde Excel (bulk)' })
   importar(@Body() dto: ImportarCasosPruebaDto, @CurrentUser() user: Usuario) {
-    return this.casosPruebaService.importar(dto, user.id);
+    return this.casosPruebaService.importar(dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Put(':id')
   @UseGuards(RolesGuard)
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Actualizar caso de prueba' })
-  update(@Param('id') id: string, @Body() dto: UpdateCasoPruebaDto) {
-    return this.casosPruebaService.update(+id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCasoPruebaDto, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Delete(':id')

@@ -20,7 +20,7 @@ import { UpdateRequerimientoDto } from './dto/update-requerimiento.dto';
 import { QueryRequerimientoDto } from './dto/query-requerimiento.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
-const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 
 @ApiTags('Requerimientos')
 @ApiBearerAuth()
@@ -33,6 +33,12 @@ export class RequerimientosController {
   @ApiOperation({ summary: 'Listar requerimientos con filtros y paginación' })
   findAll(@Query() query: QueryRequerimientoDto) {
     return this.requerimientosService.findAll(query);
+  }
+
+  @Get('next-codigo')
+  @ApiOperation({ summary: 'Previsualizar el próximo código RF para un proyecto' })
+  nextCodigo(@Query('proyectoId') proyectoId: string) {
+    return this.requerimientosService.nextCodigo(+proyectoId);
   }
 
   @Get(':id')

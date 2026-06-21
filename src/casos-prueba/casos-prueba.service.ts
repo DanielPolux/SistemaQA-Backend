@@ -1,18 +1,28 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CasoPrueba } from './entities/caso-prueba.entity';
+import { Defecto } from '../defectos/entities/defecto.entity';
 import { CreateCasoPruebaDto } from './dto/create-caso-prueba.dto';
 import { UpdateCasoPruebaDto } from './dto/update-caso-prueba.dto';
 import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
 import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+
+const CAMPOS_AUDIT = [
+  'nombre', 'codigo', 'tipo', 'descripcion', 'resultadoEsperado',
+  'prioridad', 'requerimientoRf', 'requerimientoId', 'proyectoId',
+];
 
 @Injectable()
 export class CasosPruebaService {
   constructor(
     @InjectRepository(CasoPrueba)
     private casosRepo: Repository<CasoPrueba>,
+    @InjectRepository(Defecto)
+    private defectosRepo: Repository<Defecto>,
+    private auditoriaService: AuditoriaService,
   ) {}
 
   async findAll(query: QueryCasoPruebaDto): Promise<PaginatedResponseDto<any>> {
@@ -62,34 +72,102 @@ export class CasosPruebaService {
     return this.casosRepo.find({ where: { proyectoId }, order: { creadoEn: 'DESC' } });
   }
 
-  async create(dto: CreateCasoPruebaDto, creadoPor: number): Promise<CasoPrueba> {
-    const caso = this.casosRepo.create({ ...dto, creadoPor });
-    return this.casosRepo.save(caso);
+  async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
+    const [{ max_num }] = await this.casosRepo.manager.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
+       FROM casos_prueba
+       WHERE proyecto_id = $1 AND codigo_cp ~ '^CP[0-9]+$'`,
+      [proyectoId],
+    );
+    return { codigo: `CP${String(Number(max_num) + 1).padStart(3, '0')}` };
   }
 
-  async update(id: number, dto: UpdateCasoPruebaDto): Promise<CasoPrueba> {
+  async create(dto: CreateCasoPruebaDto, creadoPor: number, usuarioNombre?: string): Promise<CasoPrueba> {
+    const [{ max_num }] = await this.casosRepo.manager.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
+       FROM casos_prueba
+       WHERE proyecto_id = $1 AND codigo_cp ~ '^CP[0-9]+$'`,
+      [dto.proyectoId],
+    );
+    const codigoGenerado = `CP${String(Number(max_num) + 1).padStart(3, '0')}`;
+
+    const caso = this.casosRepo.create({ ...dto, creadoPor, codigo: codigoGenerado });
+    let saved: CasoPrueba;
+    try {
+      saved = await this.casosRepo.save(caso);
+    } catch (e: any) {
+      if (e?.code === '23505') {
+        throw new BadRequestException(
+          `El código "${codigoGenerado}" ya está en uso en este proyecto. Intenta de nuevo.`,
+        );
+      }
+      throw e;
+    }
+
+    await this.auditoriaService.registrar({
+      entidad:       'CasoPrueba',
+      entidadId:     saved.id,
+      usuarioId:     creadoPor,
+      usuarioNombre: usuarioNombre,
+      accion:        'Creado',
+    });
+
+    return saved;
+  }
+
+  async update(
+    id: number,
+    dto: UpdateCasoPruebaDto,
+    usuarioId?: number,
+    usuarioNombre?: string,
+  ): Promise<CasoPrueba> {
     const caso = await this.casosRepo.findOne({ where: { id } });
     if (!caso) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+
+    const anterior: Record<string, any> = {};
+    for (const campo of CAMPOS_AUDIT) {
+      anterior[campo] = (caso as any)[campo] ?? null;
+    }
+
     Object.assign(caso, dto);
-    return this.casosRepo.save(caso);
+    const saved = await this.casosRepo.save(caso);
+
+    const nuevo: Record<string, any> = {};
+    for (const campo of CAMPOS_AUDIT) {
+      nuevo[campo] = (saved as any)[campo] ?? null;
+    }
+
+    await this.auditoriaService.registrarCambios(
+      'CasoPrueba', id, usuarioId, usuarioNombre, anterior, nuevo, CAMPOS_AUDIT,
+    );
+
+    return saved;
   }
 
   async remove(id: number): Promise<void> {
     const caso = await this.casosRepo.findOne({ where: { id } });
     if (!caso) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+
+    const totalDefectos = await this.defectosRepo.count({ where: { casoPruebaId: id } });
+    if (totalDefectos > 0)
+      throw new BadRequestException(
+        `No se puede eliminar el caso de prueba porque tiene ${totalDefectos} defecto(s) asociado(s).`,
+      );
+
     await this.casosRepo.remove(caso);
   }
 
   async importar(
     dto: ImportarCasosPruebaDto,
     creadoPor: number,
+    usuarioNombre?: string,
   ): Promise<{ importados: number; errores: { fila: number; mensaje: string }[] }> {
     let importados = 0;
     const errores: { fila: number; mensaje: string }[] = [];
 
     for (let i = 0; i < dto.casos.length; i++) {
       try {
-        await this.create(dto.casos[i], creadoPor);
+        await this.create(dto.casos[i], creadoPor, usuarioNombre);
         importados++;
       } catch (e: any) {
         errores.push({ fila: i + 1, mensaje: e?.message ?? 'Error desconocido' });

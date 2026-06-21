@@ -73,8 +73,19 @@ export class RequerimientosService {
     });
   }
 
+  async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
+    const [{ max_num }] = await this.requerimientosRepo.manager.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo FROM 4) AS INTEGER)), 0) AS max_num
+       FROM requerimientos
+       WHERE proyecto_id = $1 AND codigo ~ '^RF-[0-9]+$'`,
+      [proyectoId],
+    );
+    return { codigo: `RF-${String(Number(max_num) + 1).padStart(2, '0')}` };
+  }
+
   async create(dto: CreateRequerimientoDto, creadoPor: number): Promise<Requerimiento> {
-    const req = this.requerimientosRepo.create({ ...dto, creadoPor });
+    const { codigo: codigoGenerado } = await this.nextCodigo(dto.proyectoId);
+    const req = this.requerimientosRepo.create({ ...dto, creadoPor, codigo: codigoGenerado });
     return this.requerimientosRepo.save(req);
   }
 

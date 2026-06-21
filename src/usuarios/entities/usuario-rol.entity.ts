@@ -6,7 +6,8 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Usuario, Rol } from './usuario.entity';
+import { Usuario } from './usuario.entity';
+import { Rol } from './roles.enum';
 
 @Entity('usuario_roles')
 export class UsuarioRol {

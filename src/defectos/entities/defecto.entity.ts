@@ -77,8 +77,11 @@ export class Defecto {
   @JoinColumn({ name: 'requerimiento_id' })
   requerimiento: Requerimiento;
 
-  @Column({ unique: true, length: 30 })
+  @Column({ unique: true, length: 30, nullable: true })
   codigo: string;
+
+  @Column({ name: 'codigo_proyecto', length: 30, nullable: true })
+  codigoProyecto: string;
 
   @Column({ length: 300 })
   titulo: string;
@@ -134,6 +137,9 @@ export class Defecto {
     nullable: true,
   })
   estadoDesarrollo: EstadoDesarrollo | null;
+
+  @Column({ name: 'comentarios_desarrollo', type: 'text', nullable: true })
+  comentariosDesarrollo: string | null;
 
   @OneToMany(() => ComentarioDefecto, (c) => c.defecto)
   comentarios: ComentarioDefecto[];
