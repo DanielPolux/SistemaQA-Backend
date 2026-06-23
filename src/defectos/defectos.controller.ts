@@ -42,8 +42,8 @@ export class DefectosController {
 
   @Get()
   @ApiOperation({ summary: 'Listar defectos con filtros y paginación' })
-  findAll(@Query() query: QueryDefectoDto) {
-    return this.defectosService.findAll(query);
+  findAll(@Query() query: QueryDefectoDto, @CurrentUser() user: Usuario) {
+    return this.defectosService.findAll(query, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('siguiente-codigo/:proyectoId')

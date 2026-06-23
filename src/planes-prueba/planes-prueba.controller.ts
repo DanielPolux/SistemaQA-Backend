@@ -6,9 +6,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PlanesPruebaService } from './planes-prueba.service';
 import { CreatePlanPruebaDto } from './dto/create-plan-prueba.dto';
-import { Rol } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
 const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD, Rol.PROJECT_MANAGER];
 
@@ -21,8 +22,14 @@ export class PlanesPruebaController {
 
   @Get()
   @ApiOperation({ summary: 'Listar planes de prueba' })
-  findAll(@Query() query: any) {
-    return this.service.findAll(query);
+  findAll(@Query() query: any, @CurrentUser() user: Usuario) {
+    return this.service.findAll(query, user.id, user.rol === Rol.ADMIN);
+  }
+
+  @Get(':id/trazabilidad')
+  @ApiOperation({ summary: 'Matriz de trazabilidad del plan' })
+  getTrazabilidad(@Param('id') id: string) {
+    return this.service.getTrazabilidad(+id);
   }
 
   @Get(':id')

@@ -23,9 +23,9 @@ export class DashboardService {
       ultimasEjecuciones,
     ] = await Promise.all([
       this.getResumen(usuarioId, esAdmin),
-      this.getCasosPorEstado(),
-      this.getDefectosPorSeveridad(),
-      this.getDefectosPorEstado(),
+      this.getCasosPorEstado(usuarioId, esAdmin),
+      this.getDefectosPorSeveridad(usuarioId, esAdmin),
+      this.getDefectosPorEstado(usuarioId, esAdmin),
       this.getProyectosAvance(usuarioId, esAdmin),
       this.getMisCasos(usuarioId),
       this.getMisDefectosAsignados(usuarioId, esTester),
@@ -48,6 +48,16 @@ export class DashboardService {
     };
   }
 
+  private userProjectsIn(esAdmin: boolean, alias: string): string {
+    if (esAdmin) return 'true';
+    return `${alias}.proyecto_id IN (
+      SELECT p.id FROM proyectos p
+      WHERE p.jefe_proyecto_id = $1 OR p.jefe_qa_id = $1 OR p.responsable_qa_id = $1
+         OR EXISTS (SELECT 1 FROM casos_prueba c2 WHERE c2.proyecto_id = p.id AND c2.responsable_qa_id = $1)
+         OR EXISTS (SELECT 1 FROM defectos    d2 WHERE d2.proyecto_id = p.id AND (d2.asignado_a = $1 OR d2.reportado_por = $1))
+    )`;
+  }
+
   private async getResumen(usuarioId: number, esAdmin: boolean) {
     const proyectoFilter = esAdmin
       ? `estado::text IN ('Planificado','En Ejecución')`
@@ -56,35 +66,41 @@ export class DashboardService {
           id IN (SELECT DISTINCT proyecto_id FROM casos_prueba WHERE responsable_qa_id = $1) OR
           id IN (SELECT DISTINCT proyecto_id FROM defectos WHERE asignado_a = $1)
         )`;
+    const casosFilter    = this.userProjectsIn(esAdmin, 'cp');
+    const defectosFilter = this.userProjectsIn(esAdmin, 'df');
     const rows = await this.ds.query(`
       SELECT
-        (SELECT COUNT(*) FROM proyectos WHERE ${proyectoFilter})::int              AS proyectos_activos,
-        (SELECT COUNT(*) FROM casos_prueba)::int                                   AS casos_totales,
-        (SELECT COUNT(*) FROM casos_prueba WHERE estado::text = 'Ejecutado')::int  AS casos_ejecutados,
-        (SELECT COUNT(*) FROM defectos WHERE estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS defectos_abiertos,
+        (SELECT COUNT(*) FROM proyectos WHERE ${proyectoFilter})::int AS proyectos_activos,
+        (SELECT COUNT(*) FROM casos_prueba cp WHERE ${casosFilter})::int AS casos_totales,
+        (SELECT COUNT(*) FROM casos_prueba cp WHERE ${casosFilter} AND cp.estado::text = 'Ejecutado')::int AS casos_ejecutados,
+        (SELECT COUNT(*) FROM defectos df WHERE ${defectosFilter} AND df.estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS defectos_abiertos,
         (SELECT COALESCE(ROUND(AVG(porcentaje_avance)), 0) FROM proyectos WHERE ${proyectoFilter})::int AS avance_promedio,
-        (SELECT COUNT(*) FROM casos_prueba WHERE responsable_qa_id = $1)::int      AS mis_casos,
+        (SELECT COUNT(*) FROM casos_prueba WHERE responsable_qa_id = $1)::int AS mis_casos,
         (SELECT COUNT(*) FROM defectos WHERE asignado_a   = $1 AND estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS mis_defectos_abiertos,
-        (SELECT COUNT(*) FROM defectos WHERE reportado_por = $1)::int                                                          AS mis_defectos_reportados,
-        (SELECT COUNT(*) FROM defectos WHERE reportado_por = $1 AND estado::text = 'En Revisión')::int                         AS defectos_pendientes_verificacion
+        (SELECT COUNT(*) FROM defectos WHERE reportado_por = $1)::int AS mis_defectos_reportados,
+        (SELECT COUNT(*) FROM defectos WHERE reportado_por = $1 AND estado::text = 'En Revisión')::int AS defectos_pendientes_verificacion
     `, [usuarioId]);
     return rows[0];
   }
 
-  private async getCasosPorEstado() {
+  private async getCasosPorEstado(usuarioId: number, esAdmin: boolean) {
+    const where = esAdmin ? '' : `WHERE ${this.userProjectsIn(esAdmin, 'cp')}`;
     return this.ds.query(`
       SELECT estado::text AS estado, COUNT(*)::int AS total
-      FROM casos_prueba
+      FROM casos_prueba cp
+      ${where}
       GROUP BY estado
       ORDER BY total DESC
-    `);
+    `, esAdmin ? [] : [usuarioId]);
   }
 
-  private async getDefectosPorSeveridad() {
+  private async getDefectosPorSeveridad(usuarioId: number, esAdmin: boolean) {
+    const userFilter = esAdmin ? '' : `AND ${this.userProjectsIn(esAdmin, 'd')}`;
     return this.ds.query(`
       SELECT severidad::text AS severidad, COUNT(*)::int AS total
-      FROM defectos
-      WHERE estado::text NOT IN ('Cerrado','Rechazado')
+      FROM defectos d
+      WHERE d.estado::text NOT IN ('Cerrado','Rechazado')
+        ${userFilter}
       GROUP BY severidad
       ORDER BY
         CASE severidad::text
@@ -93,16 +109,18 @@ export class DashboardService {
           WHEN 'Medio'   THEN 3
           WHEN 'Bajo'    THEN 4
         END
-    `);
+    `, esAdmin ? [] : [usuarioId]);
   }
 
-  private async getDefectosPorEstado() {
+  private async getDefectosPorEstado(usuarioId: number, esAdmin: boolean) {
+    const userFilter = esAdmin ? '' : `WHERE ${this.userProjectsIn(esAdmin, 'd')}`;
     return this.ds.query(`
       SELECT estado::text AS estado, COUNT(*)::int AS total
-      FROM defectos
+      FROM defectos d
+      ${userFilter}
       GROUP BY estado
       ORDER BY total DESC
-    `);
+    `, esAdmin ? [] : [usuarioId]);
   }
 
   private async getProyectosAvance(usuarioId: number, esAdmin: boolean) {

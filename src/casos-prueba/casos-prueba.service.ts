@@ -25,7 +25,7 @@ export class CasosPruebaService {
     private auditoriaService: AuditoriaService,
   ) {}
 
-  async findAll(query: QueryCasoPruebaDto): Promise<PaginatedResponseDto<any>> {
+  async findAll(query: QueryCasoPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
     const porPagina = Number(query.porPagina) || 10;
     const skip      = (pagina - 1) * porPagina;
@@ -51,6 +51,18 @@ export class CasosPruebaService {
       qb.andWhere('(c.nombre ILIKE :b OR c.codigo ILIKE :b OR c.requerimientoRf ILIKE :b)', {
         b: `%${query.busqueda}%`,
       });
+    }
+
+    if (!esAdmin && usuarioId) {
+      qb.andWhere(
+        `(c.proyectoId IN (
+          SELECT pr.id FROM proyectos pr
+          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
+             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
+             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
+        ) OR c.responsableQaId = :uid)`,
+        { uid: usuarioId },
+      );
     }
 
     const [casos, total] = await qb.getManyAndCount();

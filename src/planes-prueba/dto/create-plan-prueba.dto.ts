@@ -43,6 +43,21 @@ export class CreatePlanPruebaDto {
   riesgos?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  sprint?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  tipoPrueba?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  ambiente?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   responsableId?: number;

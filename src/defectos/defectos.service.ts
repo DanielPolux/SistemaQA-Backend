@@ -31,7 +31,7 @@ export class DefectosService {
     private auditoriaService: AuditoriaService,
   ) {}
 
-  async findAll(query: QueryDefectoDto): Promise<PaginatedResponseDto<any>> {
+  async findAll(query: QueryDefectoDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina = Number(query.pagina) || 1;
     const porPagina = Number(query.porPagina) || 10;
     const skip = (pagina - 1) * porPagina;
@@ -55,6 +55,18 @@ export class DefectosService {
     if (query.reportadoPor) qb.andWhere('d.reportadoPor = :rp', { rp: query.reportadoPor });
     if (query.busqueda) {
       qb.andWhere('(d.titulo ILIKE :b OR d.codigo ILIKE :b OR d.codigoProyecto ILIKE :b)', { b: `%${query.busqueda}%` });
+    }
+
+    if (!esAdmin && usuarioId) {
+      qb.andWhere(
+        `(d.proyectoId IN (
+          SELECT pr.id FROM proyectos pr
+          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
+             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
+             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
+        ) OR d.asignadoA = :uid OR d.reportadoPor = :uid)`,
+        { uid: usuarioId },
+      );
     }
 
     const [defectos, total] = await qb.getManyAndCount();

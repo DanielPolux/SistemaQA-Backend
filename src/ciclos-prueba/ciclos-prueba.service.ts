@@ -13,7 +13,7 @@ export class CiclosPruebaService {
     private repo: Repository<CicloPrueba>,
   ) {}
 
-  async findAll(query: QueryCicloPruebaDto): Promise<PaginatedResponseDto<any>> {
+  async findAll(query: QueryCicloPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
     const porPagina = Number(query.porPagina) || 15;
     const skip      = (pagina - 1) * porPagina;
@@ -29,6 +29,18 @@ export class CiclosPruebaService {
 
     if (query.proyectoId) qb.andWhere('c.proyectoId = :pid', { pid: query.proyectoId });
     if (query.estado)     qb.andWhere('c.estado = :estado', { estado: query.estado });
+
+    if (!esAdmin && usuarioId) {
+      qb.andWhere(
+        `c.proyectoId IN (
+          SELECT pr.id FROM proyectos pr
+          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
+             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
+             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
+        )`,
+        { uid: usuarioId },
+      );
+    }
 
     const [items, total] = await qb.getManyAndCount();
 
@@ -179,6 +191,16 @@ export class CiclosPruebaService {
       );
     }
 
+    const cicloActivo = await this.repo.findOne({
+      where: { proyectoId: dto.proyectoId, estado: EstadoCiclo.ACTIVO },
+    });
+    if (cicloActivo) {
+      throw new BadRequestException(
+        `El proyecto ya tiene un ciclo activo: "${cicloActivo.nombre}". ` +
+        `Debes cerrarlo antes de crear uno nuevo.`,
+      );
+    }
+
     // Resolve plan name if provided
     let planNombre: string | null = null;
     if (dto.planPruebaId) {
@@ -197,6 +219,14 @@ export class CiclosPruebaService {
       estado: EstadoCiclo.ACTIVO,
     });
     const saved = await this.repo.save(ciclo);
+
+    // Auto-advance linked plan state to 'En ejecución'
+    if (saved.planPruebaId) {
+      await this.repo.manager.query(
+        `UPDATE planes_prueba SET estado = 'En ejecución' WHERE id = $1 AND estado != 'Cerrado'`,
+        [saved.planPruebaId],
+      );
+    }
 
     if (casosIds && casosIds.length > 0) {
       const { casos } = await this.getCasosPrevios(dto.proyectoId);
@@ -232,7 +262,17 @@ export class CiclosPruebaService {
   async reabrir(id: number): Promise<CicloPrueba> {
     const ciclo = await this.findOne(id);
     ciclo.estado = EstadoCiclo.ACTIVO;
-    return this.repo.save(ciclo);
+    const saved = await this.repo.save(ciclo);
+
+    // Auto-advance linked plan state to 'En ejecución'
+    if (ciclo.planPruebaId) {
+      await this.repo.manager.query(
+        `UPDATE planes_prueba SET estado = 'En ejecución' WHERE id = $1 AND estado != 'Cerrado'`,
+        [ciclo.planPruebaId],
+      );
+    }
+
+    return saved;
   }
 
   async remove(id: number): Promise<void> {

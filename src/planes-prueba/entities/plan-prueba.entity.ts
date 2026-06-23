@@ -6,8 +6,10 @@ import { Proyecto } from '../../proyectos/entities/proyecto.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
 export enum EstadoPlan {
-  ACTIVO  = 'Activo',
-  CERRADO = 'Cerrado',
+  BORRADOR     = 'Borrador',
+  PLANIFICADO  = 'Planificado',
+  EN_EJECUCION = 'En ejecución',
+  CERRADO      = 'Cerrado',
 }
 
 @Entity('planes_prueba')
@@ -39,6 +41,15 @@ export class PlanPrueba {
   @Column({ type: 'text', nullable: true })
   riesgos: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  sprint: string | null;
+
+  @Column({ name: 'tipo_prueba', type: 'varchar', length: 50, nullable: true })
+  tipoPrueba: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  ambiente: string | null;
+
   @Column({ name: 'proyecto_id' })
   proyectoId: number;
 
@@ -59,7 +70,7 @@ export class PlanPrueba {
   @Column({ name: 'responsable_nombre', type: 'varchar', length: 200, nullable: true })
   responsableNombre: string | null;
 
-  @Column({ length: 20, default: EstadoPlan.ACTIVO })
+  @Column({ length: 30, default: EstadoPlan.BORRADOR })
   estado: EstadoPlan;
 
   @Column({ name: 'fecha_inicio', type: 'date', nullable: true })

@@ -80,7 +80,7 @@ export class EjecucionesService {
     return this.repo.save(ejecucion);
   }
 
-  async findAll(query: QueryEjecucionDto): Promise<PaginatedResponseDto<any>> {
+  async findAll(query: QueryEjecucionDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
     const porPagina = Number(query.porPagina) || 20;
     const skip      = (pagina - 1) * porPagina;
@@ -102,6 +102,18 @@ export class EjecucionesService {
     if (query.resultado)    qb.andWhere('e.resultado     = :res',  { res:  query.resultado });
     if (query.ambiente)     qb.andWhere('e.ambiente      = :amb',  { amb:  query.ambiente });
     if (query.testerId)     qb.andWhere('e.testerId      = :tid',  { tid:  query.testerId });
+
+    if (!esAdmin && usuarioId) {
+      qb.andWhere(
+        `(e.proyectoId IN (
+          SELECT pr.id FROM proyectos pr
+          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
+             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
+             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
+        ) OR e.testerId = :uid)`,
+        { uid: usuarioId },
+      );
+    }
 
     const [items, total] = await qb.getManyAndCount();
 

@@ -11,7 +11,7 @@ export class PlanesPruebaService {
     private repo: Repository<PlanPrueba>,
   ) {}
 
-  async findAll(query: { proyectoId?: number; estado?: string; pagina?: number; porPagina?: number }): Promise<any> {
+  async findAll(query: { proyectoId?: number; estado?: string; pagina?: number; porPagina?: number }, usuarioId?: number, esAdmin = true): Promise<any> {
     const pagina    = Number(query.pagina)    || 1;
     const porPagina = Number(query.porPagina) || 15;
     const skip      = (pagina - 1) * porPagina;
@@ -26,6 +26,18 @@ export class PlanesPruebaService {
 
     if (query.proyectoId) qb.andWhere('p.proyectoId = :pid', { pid: query.proyectoId });
     if (query.estado)     qb.andWhere('p.estado = :estado', { estado: query.estado });
+
+    if (!esAdmin && usuarioId) {
+      qb.andWhere(
+        `p.proyectoId IN (
+          SELECT pr2.id FROM proyectos pr2
+          WHERE pr2.jefe_proyecto_id = :uid OR pr2.jefe_qa_id = :uid OR pr2.responsable_qa_id = :uid
+             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr2.id AND cp2.responsable_qa_id = :uid)
+             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr2.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
+        )`,
+        { uid: usuarioId },
+      );
+    }
 
     const [items, total] = await qb.getManyAndCount();
 
@@ -150,15 +162,25 @@ export class PlanesPruebaService {
     const { requerimientoIds, ...planData } = dto;
     const plan = this.repo.create({
       ...planData,
-      responsableId:     dto.responsableId     ?? null,
+      sprint:            dto.sprint       ?? null,
+      tipoPrueba:        dto.tipoPrueba   ?? null,
+      ambiente:          dto.ambiente     ?? null,
+      responsableId:     dto.responsableId ?? null,
       proyectoNombre:    proyRow.nombre,
       responsableNombre,
-      estado:            EstadoPlan.ACTIVO,
+      estado:            EstadoPlan.BORRADOR,
     });
     const saved = await this.repo.save(plan);
 
     if (requerimientoIds?.length) {
       await this.syncRequerimientos(saved.id, requerimientoIds);
+    }
+
+    // Auto-advance state based on linked requerimientos
+    const nuevoEstado = await this.recalcularEstado(saved.id);
+    if (nuevoEstado !== saved.estado) {
+      saved.estado = nuevoEstado;
+      await this.repo.save(saved);
     }
 
     return this.findOne(saved.id);
@@ -187,6 +209,14 @@ export class PlanesPruebaService {
       await this.syncRequerimientos(id, requerimientoIds ?? []);
     }
 
+    // Auto-recalculate state unless manually closed
+    if (plan.estado !== EstadoPlan.CERRADO) {
+      const nuevoEstado = await this.recalcularEstado(id);
+      if (nuevoEstado !== plan.estado) {
+        await this.repo.update(id, { estado: nuevoEstado });
+      }
+    }
+
     return this.findOne(id);
   }
 
@@ -202,24 +232,145 @@ export class PlanesPruebaService {
     }
   }
 
-  async cerrar(id: number): Promise<PlanPrueba> {
+  async cerrar(id: number): Promise<any> {
     const plan = await this.repo.findOne({ where: { id } });
     if (!plan) throw new NotFoundException(`Plan #${id} no encontrado`);
     plan.estado = EstadoPlan.CERRADO;
-    return this.repo.save(plan);
+    await this.repo.save(plan);
+    return this.findOne(id);
   }
 
-  async reabrir(id: number): Promise<PlanPrueba> {
+  async reabrir(id: number): Promise<any> {
     const plan = await this.repo.findOne({ where: { id } });
     if (!plan) throw new NotFoundException(`Plan #${id} no encontrado`);
-    plan.estado = EstadoPlan.ACTIVO;
-    return this.repo.save(plan);
+    plan.estado = await this.recalcularEstado(id);
+    await this.repo.save(plan);
+    return this.findOne(id);
+  }
+
+  // Called by CiclosPruebaService when a ciclo linked to this plan is created/reactivated
+  async activarPorCiclo(planId: number): Promise<void> {
+    await this.repo.manager.query(
+      `UPDATE planes_prueba SET estado = $1 WHERE id = $2 AND estado != $3`,
+      [EstadoPlan.EN_EJECUCION, planId, EstadoPlan.CERRADO],
+    );
+  }
+
+  async getTrazabilidad(planId: number): Promise<any> {
+    const plan = await this.repo.findOne({ where: { id: planId } });
+    if (!plan) throw new NotFoundException(`Plan #${planId} no encontrado`);
+
+    const rows: any[] = await this.repo.manager.query(
+      `SELECT
+         r.id           AS "reqId",
+         r.codigo       AS "reqCodigo",
+         r.titulo       AS "reqTitulo",
+         r.prioridad    AS "reqPrioridad",
+         r.estado       AS "reqEstado",
+         cp.id          AS "casoId",
+         cp.codigo_cp   AS "casoCodigo",
+         cp.nombre      AS "casoTitulo",
+         cp.tipo        AS "casoTipo",
+         cp.prioridad   AS "casoPrioridad",
+         ult.resultado  AS "ultimoResultado",
+         ult.creado_en  AS "ultimaEjecucionFecha"
+       FROM plan_requerimientos pr
+       JOIN requerimientos r ON r.id = pr.requerimiento_id
+       LEFT JOIN casos_prueba cp ON cp.requerimiento_id = r.id
+       LEFT JOIN LATERAL (
+         SELECT e.resultado, e.creado_en
+         FROM ejecuciones_caso_prueba e
+         JOIN ciclos_prueba c ON c.id = e.ciclo_id
+         WHERE e.caso_prueba_id = cp.id
+           AND c.plan_prueba_id = $1
+         ORDER BY e.creado_en DESC
+         LIMIT 1
+       ) ult ON true
+       WHERE pr.plan_id = $1
+       ORDER BY r.codigo, cp.codigo_cp`,
+      [planId],
+    );
+
+    const casoIds = [...new Set(rows.filter(r => r.casoId).map(r => Number(r.casoId)))];
+    const defectos: any[] = casoIds.length
+      ? await this.repo.manager.query(
+          `SELECT
+             d.id,
+             d.caso_prueba_id  AS "casoPruebaId",
+             d.codigo_proyecto AS "codigoProyecto",
+             d.titulo,
+             d.estado,
+             d.severidad
+           FROM defectos d
+           WHERE d.caso_prueba_id = ANY($1)
+           ORDER BY d.creado_en DESC`,
+          [casoIds],
+        )
+      : [];
+
+    const defectosPorCaso = defectos.reduce((acc: Record<number, any[]>, d) => {
+      (acc[d.casoPruebaId] ??= []).push(d);
+      return acc;
+    }, {});
+
+    const reqMap = new Map<number, any>();
+    for (const row of rows) {
+      if (!reqMap.has(row.reqId)) {
+        reqMap.set(row.reqId, {
+          id:       row.reqId,
+          codigo:   row.reqCodigo,
+          titulo:   row.reqTitulo,
+          prioridad: row.reqPrioridad,
+          estado:   row.reqEstado,
+          casos:    [],
+        });
+      }
+      if (row.casoId) {
+        reqMap.get(row.reqId).casos.push({
+          id:                   row.casoId,
+          codigo:               row.casoCodigo,
+          titulo:               row.casoTitulo,
+          tipo:                 row.casoTipo,
+          prioridad:            row.casoPrioridad,
+          ultimoResultado:      row.ultimoResultado      ?? null,
+          ultimaEjecucionFecha: row.ultimaEjecucionFecha ?? null,
+          defectos:             defectosPorCaso[row.casoId] ?? [],
+        });
+      }
+    }
+
+    return {
+      planId,
+      planNombre:     plan.nombre,
+      proyectoNombre: plan.proyectoNombre,
+      requerimientos: Array.from(reqMap.values()),
+    };
   }
 
   async remove(id: number): Promise<void> {
     const plan = await this.repo.findOne({ where: { id } });
     if (!plan) throw new NotFoundException(`Plan #${id} no encontrado`);
     await this.repo.remove(plan);
+  }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  private async recalcularEstado(planId: number): Promise<EstadoPlan> {
+    const [{ activeCiclos }] = await this.repo.manager.query(
+      `SELECT COUNT(*)::int AS "activeCiclos"
+       FROM ciclos_prueba
+       WHERE plan_prueba_id = $1 AND estado = 'Activo'`,
+      [planId],
+    );
+    if (activeCiclos > 0) return EstadoPlan.EN_EJECUCION;
+
+    const [{ totalReqs }] = await this.repo.manager.query(
+      `SELECT COUNT(*)::int AS "totalReqs"
+       FROM plan_requerimientos
+       WHERE plan_id = $1`,
+      [planId],
+    );
+    return totalReqs > 0 ? EstadoPlan.PLANIFICADO : EstadoPlan.BORRADOR;
   }
 
   private calcEstadoValidacion(r: any): string {

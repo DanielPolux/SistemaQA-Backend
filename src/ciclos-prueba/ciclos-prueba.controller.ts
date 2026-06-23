@@ -23,8 +23,8 @@ export class CiclosPruebaController {
 
   @Get()
   @ApiOperation({ summary: 'Listar ciclos de prueba' })
-  findAll(@Query() query: QueryCicloPruebaDto) {
-    return this.service.findAll(query);
+  findAll(@Query() query: QueryCicloPruebaDto, @CurrentUser() user: Usuario) {
+    return this.service.findAll(query, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('activo/:proyectoId')

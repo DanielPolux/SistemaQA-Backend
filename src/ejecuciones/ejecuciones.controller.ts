@@ -7,7 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { EjecucionesService } from './ejecuciones.service';
 import { CreateEjecucionDto } from './dto/create-ejecucion.dto';
 import { QueryEjecucionDto } from './dto/query-ejecucion.dto';
-import { Rol } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
 @ApiTags('Ejecuciones')
 @ApiBearerAuth()
@@ -26,8 +26,8 @@ export class EjecucionesController {
 
   @Get()
   @ApiOperation({ summary: 'Listar ejecuciones con filtros y paginación' })
-  findAll(@Query() query: QueryEjecucionDto) {
-    return this.service.findAll(query);
+  findAll(@Query() query: QueryEjecucionDto, @CurrentUser() user: Usuario) {
+    return this.service.findAll(query, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('caso-prueba/:id')

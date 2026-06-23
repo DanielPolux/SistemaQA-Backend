@@ -31,8 +31,8 @@ export class RequerimientosController {
 
   @Get()
   @ApiOperation({ summary: 'Listar requerimientos con filtros y paginación' })
-  findAll(@Query() query: QueryRequerimientoDto) {
-    return this.requerimientosService.findAll(query);
+  findAll(@Query() query: QueryRequerimientoDto, @CurrentUser() user: Usuario) {
+    return this.requerimientosService.findAll(query, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('next-codigo')

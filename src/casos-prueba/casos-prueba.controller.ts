@@ -36,8 +36,8 @@ export class CasosPruebaController {
 
   @Get()
   @ApiOperation({ summary: 'Listar casos de prueba con filtros y paginación' })
-  findAll(@Query() query: QueryCasoPruebaDto) {
-    return this.casosPruebaService.findAll(query);
+  findAll(@Query() query: QueryCasoPruebaDto, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.findAll(query, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('next-codigo')
