@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Defecto, EstadoDefecto, EstadoDesarrollo } from './entities/defecto.entity';
 import { ComentarioDefecto } from './entities/comentario-defecto.entity';
-import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 import { Proyecto } from '../proyectos/entities/proyecto.entity';
 import { CreateDefectoDto } from './dto/create-defecto.dto';
 import { UpdateDefectoDto } from './dto/update-defecto.dto';
@@ -29,6 +30,7 @@ export class DefectosService {
     private proyectosRepo: Repository<Proyecto>,
     private mailService: MailService,
     private auditoriaService: AuditoriaService,
+    private config: ConfigService,
   ) {}
 
   async findAll(query: QueryDefectoDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
@@ -204,7 +206,7 @@ export class DefectosService {
     );
 
     if (dto.asignadoA !== undefined && dto.asignadoA !== asignadoAnterior && dto.asignadoA) {
-      this.enviarCorreoNuevoDefecto(saved).catch(() => {});
+      this.enviarCorreoNuevoDefecto(saved, true).catch(() => {});
     }
 
     return saved;
@@ -321,29 +323,70 @@ export class DefectosService {
 
   // ── Envíos de correo ────────────────────────────────────────────────────────
 
-  private async enviarCorreoNuevoDefecto(defecto: Defecto): Promise<void> {
+  async enviarCorreoNuevoDefecto(defecto: Defecto, esAsignacionPM = false): Promise<void> {
     if (!defecto.asignadoA) return;
 
-    const [developer, reportador, proyecto] = await Promise.all([
+    const [asignado, reportador, proyecto] = await Promise.all([
       this.usuariosRepo.findOne({ where: { id: defecto.asignadoA } }),
       this.usuariosRepo.findOne({ where: { id: defecto.reportadoPor } }),
       this.proyectosRepo.findOne({ where: { id: defecto.proyectoId }, relations: ['jefeProyecto'] }),
     ]);
 
-    if (!developer) return;
+    if (!asignado?.email) return;
 
-    const cc: string[] = [];
-    if (reportador?.email) cc.push(reportador.email);
-    if (proyecto?.jefeProyecto?.email && proyecto.jefeProyecto.email !== reportador?.email) {
-      cc.push(proyecto.jefeProyecto.email);
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
+    const linkDefecto = `${frontendUrl}/defectos/${defecto.id}`;
+    const esPM = asignado.rol === Rol.PROJECT_MANAGER || asignado.rol === Rol.ADMIN;
+
+    let subject: string;
+    let html: string;
+    let cc: string[] | undefined;
+    let auditLabel: string;
+
+    if (esPM) {
+      subject    = `[Defecto Pendiente de Asignación] ${defecto.codigoProyecto} — ${defecto.titulo}`;
+      html       = this.plantillaDefectoParaPM(defecto, asignado, reportador, proyecto, linkDefecto);
+      auditLabel = 'PM sin asignar';
+    } else if (esAsignacionPM) {
+      const ccList: string[] = [];
+      if (proyecto?.jefeProyecto?.email && proyecto.jefeProyecto.email !== asignado.email) {
+        ccList.push(proyecto.jefeProyecto.email);
+      }
+      cc         = ccList.length ? ccList : undefined;
+      subject    = `[Defecto Asignado] ${defecto.codigoProyecto} — ${defecto.titulo}`;
+      html       = this.plantillaDefectoAsignado(defecto, asignado, reportador, proyecto, linkDefecto);
+      auditLabel = 'Asignado por PM';
+    } else {
+      const ccList: string[] = [];
+      if (proyecto?.jefeProyecto?.email && proyecto.jefeProyecto.email !== asignado.email) {
+        ccList.push(proyecto.jefeProyecto.email);
+      }
+      cc         = ccList.length ? ccList : undefined;
+      subject    = `[Nuevo Defecto] ${defecto.codigoProyecto} — ${defecto.titulo}`;
+      html       = this.plantillaDefectoNuevo(defecto, asignado, reportador, proyecto, linkDefecto);
+      auditLabel = 'Nuevo defecto';
     }
 
-    await this.mailService.send({
-      to: developer.email,
-      cc: cc.length ? cc : undefined,
-      subject: `[Nuevo Defecto] ${defecto.codigo} — ${defecto.titulo}`,
-      html: this.plantillaDefectoNuevo(defecto, developer, reportador, proyecto),
-    });
+    try {
+      await this.mailService.send({ to: asignado.email, cc, subject, html });
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Correo Enviado',
+        campo:         'notificacion',
+        valorNuevo:    `${auditLabel} → To: ${asignado.email}${cc?.length ? ` | CC: ${cc.join(', ')}` : ''}`,
+      });
+    } catch (err) {
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Error Correo',
+        campo:         'notificacion',
+        valorNuevo:    err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private async enviarCorreoCambioEstado(defecto: Defecto, nuevoEstado: EstadoDefecto): Promise<void> {
@@ -364,12 +407,31 @@ export class DefectosService {
 
     if (!destinatarios.length) return;
 
-    await this.mailService.send({
-      to: destinatarios,
-      cc: cc.length ? cc : undefined,
-      subject: `[Defecto ${nuevoEstado}] ${defecto.codigo} — ${defecto.titulo}`,
-      html: this.plantillaCambioEstado(defecto, nuevoEstado, reportador, asignado, proyecto),
-    });
+    try {
+      await this.mailService.send({
+        to: destinatarios,
+        cc: cc.length ? cc : undefined,
+        subject: `[Defecto ${nuevoEstado}] ${defecto.codigo} — ${defecto.titulo}`,
+        html: this.plantillaCambioEstado(defecto, nuevoEstado, reportador, asignado, proyecto),
+      });
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Correo Enviado',
+        campo:         'notificacion',
+        valorNuevo:    `Cambio estado → ${nuevoEstado} | To: ${destinatarios.join(', ')}${cc.length ? ` | CC: ${cc.join(', ')}` : ''}`,
+      });
+    } catch (err) {
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Error Correo',
+        campo:         'notificacion',
+        valorNuevo:    err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private async enviarCorreoEstadoDesarrollo(defecto: Defecto, estado: EstadoDesarrollo): Promise<void> {
@@ -389,12 +451,31 @@ export class DefectosService {
       cc.push(proyecto.jefeProyecto.email);
     }
 
-    await this.mailService.send({
-      to: reportador.email,
-      cc: cc.length ? cc : undefined,
-      subject: `[Acción Requerida] Defecto ${defecto.codigo} marcado como ${estado} — ${defecto.titulo}`,
-      html: this.plantillaEstadoDesarrollo(defecto, estado, reportador, developer, proyecto),
-    });
+    try {
+      await this.mailService.send({
+        to: reportador.email,
+        cc: cc.length ? cc : undefined,
+        subject: `[Acción Requerida] Defecto ${defecto.codigo} marcado como ${estado} — ${defecto.titulo}`,
+        html: this.plantillaEstadoDesarrollo(defecto, estado, reportador, developer, proyecto),
+      });
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Correo Enviado',
+        campo:         'notificacion',
+        valorNuevo:    `Estado dev → ${estado} | To: ${reportador.email}${cc.length ? ` | CC: ${cc.join(', ')}` : ''}`,
+      });
+    } catch (err) {
+      await this.auditoriaService.registrar({
+        entidad:       'Defecto',
+        entidadId:     defecto.id,
+        usuarioNombre: 'Sistema',
+        accion:        'Error Correo',
+        campo:         'notificacion',
+        valorNuevo:    err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // ── Plantillas HTML ─────────────────────────────────────────────────────────
@@ -404,17 +485,18 @@ export class DefectosService {
     developer: Usuario,
     reportador: Usuario | null,
     proyecto: Proyecto | null,
+    linkDefecto: string,
   ): string {
     return `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
         <div style="background:#dc3545;padding:20px;border-radius:8px 8px 0 0">
-          <h2 style="color:#fff;margin:0">🐛 Nuevo Defecto Asignado</h2>
+          <h2 style="color:#fff;margin:0">&#x1F41B; Nuevo Defecto Asignado</h2>
         </div>
         <div style="background:#f8f9fa;padding:24px;border-radius:0 0 8px 8px">
           <p>Hola <strong>${developer.nombre} ${developer.apellido}</strong>,</p>
           <p>Se te ha asignado un nuevo defecto en el proyecto <strong>${proyecto?.nombre ?? '—'}</strong>.</p>
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
-            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">Código</td><td style="padding:8px;border:1px solid #dee2e6">${d.codigo}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">Código</td><td style="padding:8px;border:1px solid #dee2e6">${d.codigoProyecto ?? d.codigo}</td></tr>
             <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Título</td><td style="padding:8px;border:1px solid #dee2e6">${d.titulo}</td></tr>
             <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Severidad</td><td style="padding:8px;border:1px solid #dee2e6">${d.severidad}</td></tr>
             <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Prioridad</td><td style="padding:8px;border:1px solid #dee2e6">${d.prioridad}</td></tr>
@@ -428,7 +510,84 @@ export class DefectosService {
           <pre style="background:#fff;padding:12px;border:1px solid #dee2e6;white-space:pre-wrap">${d.pasosReproduccion}</pre>
           <p><strong>Resultado esperado:</strong></p>
           <p style="background:#fff;padding:12px;border-left:4px solid #28a745;margin:0">${d.resultadoEsperado}</p>
-          <hr style="margin:24px 0;border:none;border-top:1px solid #dee2e6">
+          <div style="margin:24px 0;text-align:center">
+            <a href="${linkDefecto}" style="background:#dc3545;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Ver Defecto en el Sistema</a>
+          </div>
+          <hr style="margin:16px 0;border:none;border-top:1px solid #dee2e6">
+          <p style="color:#6c757d;font-size:12px">Sistema QA — notificación automática</p>
+        </div>
+      </div>`;
+  }
+
+  private plantillaDefectoAsignado(
+    d: Defecto,
+    developer: Usuario,
+    reportador: Usuario | null,
+    proyecto: Proyecto | null,
+    linkDefecto: string,
+  ): string {
+    return `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#0d6efd;padding:20px;border-radius:8px 8px 0 0">
+          <h2 style="color:#fff;margin:0">&#x1F464; Defecto Asignado a Ti</h2>
+        </div>
+        <div style="background:#f8f9fa;padding:24px;border-radius:0 0 8px 8px">
+          <p>Hola <strong>${developer.nombre} ${developer.apellido}</strong>,</p>
+          <p>El Project Manager te ha asignado el siguiente defecto en el proyecto <strong>${proyecto?.nombre ?? '—'}</strong>. Por favor revísalo y comienza a trabajar en él.</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0">
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">Código</td><td style="padding:8px;border:1px solid #dee2e6">${d.codigoProyecto ?? d.codigo}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Título</td><td style="padding:8px;border:1px solid #dee2e6">${d.titulo}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Severidad</td><td style="padding:8px;border:1px solid #dee2e6">${d.severidad}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Prioridad</td><td style="padding:8px;border:1px solid #dee2e6">${d.prioridad}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Ambiente</td><td style="padding:8px;border:1px solid #dee2e6">${d.ambiente}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Versión</td><td style="padding:8px;border:1px solid #dee2e6">${d.version}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Reportado por</td><td style="padding:8px;border:1px solid #dee2e6">${reportador ? `${reportador.nombre} ${reportador.apellido}` : '—'}</td></tr>
+          </table>
+          <p><strong>Descripción:</strong></p>
+          <p style="background:#fff;padding:12px;border-left:4px solid #0d6efd;margin:0">${d.descripcion}</p>
+          <p style="margin-top:16px"><strong>Pasos para reproducir:</strong></p>
+          <pre style="background:#fff;padding:12px;border:1px solid #dee2e6;white-space:pre-wrap">${d.pasosReproduccion}</pre>
+          <p><strong>Resultado esperado:</strong></p>
+          <p style="background:#fff;padding:12px;border-left:4px solid #28a745;margin:0">${d.resultadoEsperado}</p>
+          <div style="margin:24px 0;text-align:center">
+            <a href="${linkDefecto}" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Ver Defecto en el Sistema</a>
+          </div>
+          <hr style="margin:16px 0;border:none;border-top:1px solid #dee2e6">
+          <p style="color:#6c757d;font-size:12px">Sistema QA — notificación automática</p>
+        </div>
+      </div>`;
+  }
+
+  private plantillaDefectoParaPM(
+    d: Defecto,
+    pm: Usuario,
+    reportador: Usuario | null,
+    proyecto: Proyecto | null,
+    linkDefecto: string,
+  ): string {
+    return `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#fd7e14;padding:20px;border-radius:8px 8px 0 0">
+          <h2 style="color:#fff;margin:0">&#x26A0;&#xFE0F; Defecto pendiente de asignación</h2>
+        </div>
+        <div style="background:#f8f9fa;padding:24px;border-radius:0 0 8px 8px">
+          <p>Hola <strong>${pm.nombre} ${pm.apellido}</strong>,</p>
+          <p>Se ha registrado un nuevo defecto en el proyecto <strong>${proyecto?.nombre ?? '—'}</strong> que requiere tu atención.</p>
+          <div style="background:#fff3cd;border-left:4px solid #fd7e14;padding:14px;border-radius:0 6px 6px 0;margin:16px 0">
+            <strong>Acción requerida:</strong> Ingresa al sistema y asigna este defecto al desarrollador responsable para que pueda ser atendido.
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0">
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">Código</td><td style="padding:8px;border:1px solid #dee2e6">${d.codigoProyecto ?? d.codigo}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Título</td><td style="padding:8px;border:1px solid #dee2e6">${d.titulo}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Severidad</td><td style="padding:8px;border:1px solid #dee2e6">${d.severidad}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Prioridad</td><td style="padding:8px;border:1px solid #dee2e6">${d.prioridad}</td></tr>
+            <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Ambiente</td><td style="padding:8px;border:1px solid #dee2e6">${d.ambiente}</td></tr>
+            <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Reportado por</td><td style="padding:8px;border:1px solid #dee2e6">${reportador ? `${reportador.nombre} ${reportador.apellido}` : '—'}</td></tr>
+          </table>
+          <div style="margin:24px 0;text-align:center">
+            <a href="${linkDefecto}" style="background:#fd7e14;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Asignar Defecto en el Sistema</a>
+          </div>
+          <hr style="margin:16px 0;border:none;border-top:1px solid #dee2e6">
           <p style="color:#6c757d;font-size:12px">Sistema QA — notificación automática</p>
         </div>
       </div>`;

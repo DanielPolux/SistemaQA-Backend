@@ -21,7 +21,8 @@ export class EjecucionesController {
   @Roles(Rol.QA_TESTER, Rol.QA_LEAD, Rol.ADMIN)
   @ApiOperation({ summary: 'Registrar una ejecución de caso de prueba (con defecto inline si resultado es Fallido)' })
   create(@Body() dto: CreateEjecucionDto, @CurrentUser() user: any) {
-    return this.service.create(dto, user?.id);
+    const nombre = user ? `${user.nombre} ${user.apellido}` : undefined;
+    return this.service.create(dto, user?.id, nombre);
   }
 
   @Get()

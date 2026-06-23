@@ -7,6 +7,8 @@ import { Defecto } from '../defectos/entities/defecto.entity';
 import { CreateEjecucionDto } from './dto/create-ejecucion.dto';
 import { QueryEjecucionDto } from './dto/query-ejecucion.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+import { DefectosService } from '../defectos/defectos.service';
 
 @Injectable()
 export class EjecucionesService {
@@ -16,9 +18,11 @@ export class EjecucionesService {
     @InjectRepository(CicloPrueba)
     private ciclosRepo: Repository<CicloPrueba>,
     private dataSource: DataSource,
+    private auditoriaService: AuditoriaService,
+    private defectosService: DefectosService,
   ) {}
 
-  async create(dto: CreateEjecucionDto, reportadoPor?: number): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
+  async create(dto: CreateEjecucionDto, reportadoPor?: number, usuarioNombre?: string): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
     const { defectoData, ...ejecucionFields } = dto;
     const esFallido = ejecucionFields.resultado === ResultadoEjecucion.FALLIDO;
 
@@ -26,7 +30,7 @@ export class EjecucionesService {
       return this.crearSoloEjecucion(ejecucionFields);
     }
 
-    return this.dataSource.transaction(async (em) => {
+    const resultado = await this.dataSource.transaction(async (em) => {
       // Resolver ciclo activo dentro de la transacción
       let cicloId = ejecucionFields.cicloId ?? undefined;
       if (!cicloId && ejecucionFields.proyectoId) {
@@ -63,8 +67,20 @@ export class EjecucionesService {
         [defectoFinal.id, ejecucionGuardada.id],
       );
 
-      return { ...ejecucionGuardada, defecto: defectoFinal };
+      return { ejecucionGuardada, defectoFinal };
     });
+
+    await this.auditoriaService.registrar({
+      entidad:       'Defecto',
+      entidadId:     resultado.defectoFinal.id,
+      usuarioId:     reportadoPor,
+      usuarioNombre,
+      accion:        'Creado',
+    });
+
+    this.defectosService.enviarCorreoNuevoDefecto(resultado.defectoFinal).catch(() => {});
+
+    return { ...resultado.ejecucionGuardada, defecto: resultado.defectoFinal };
   }
 
   private async crearSoloEjecucion(fields: Omit<CreateEjecucionDto, 'defectoData'>): Promise<EjecucionCasoPrueba> {
