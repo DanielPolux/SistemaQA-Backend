@@ -62,11 +62,13 @@ src/
 │
 ├── usuarios/                # CRUD usuarios
 ├── proyectos/               # CRUD proyectos (filtrado por usuario via JWT)
-├── requerimientos/          # CRUD requerimientos
-├── casos-prueba/            # CRUD casos de prueba + auditoría
-├── ciclos-prueba/           # CRUD ciclos de prueba
-├── ejecuciones/             # Registro de ejecuciones (auto-asigna ciclo activo)
-├── defectos/                # CRUD defectos + comentarios + códigos INC/DEF
+├── requerimientos/          # CRUD requerimientos (filtrado por usuario)
+├── casos-prueba/            # CRUD casos de prueba + auditoría (filtrado por usuario)
+├── ciclos-prueba/           # CRUD ciclos + validación ciclo único activo por proyecto
+├── ejecuciones/             # Registro de ejecuciones (auto-asigna ciclo activo, filtrado por usuario)
+├── defectos/                # CRUD defectos + comentarios + códigos INC/DEF (filtrado por usuario)
+├── planes-prueba/           # CRUD planes + endpoint trazabilidad (filtrado por usuario)
+├── dashboard/               # Stats filtradas por usuario autenticado
 └── mail/                    # Servicio de correo (Nodemailer)
 ```
 
@@ -103,7 +105,7 @@ DELETE /api/proyectos/:id
 
 ### Requerimientos
 ```
-GET    /api/requerimientos     ?proyectoId&tipo&estado&busqueda&pagina
+GET    /api/requerimientos     ?proyectoId&tipo&estado&busqueda&pagina  [filtrado por usuario]
 GET    /api/requerimientos/:id
 GET    /api/proyectos/:id/requerimientos
 POST   /api/requerimientos
@@ -113,7 +115,7 @@ DELETE /api/requerimientos/:id
 
 ### Casos de Prueba
 ```
-GET    /api/casos-prueba       ?proyectoId&requerimientoId&estado&tipo&resultado&busqueda
+GET    /api/casos-prueba       ?proyectoId&requerimientoId&estado&tipo&resultado&busqueda&pagina  [filtrado por usuario]
 GET    /api/casos-prueba/:id
 POST   /api/casos-prueba
 PUT    /api/casos-prueba/:id
@@ -123,20 +125,23 @@ GET    /api/casos-prueba/:id/auditoria
 
 ### Ciclos de Prueba
 ```
-GET    /api/ciclos-prueba              ?proyectoId&estado&pagina&porPagina
-GET    /api/ciclos-prueba/activo/:proyectoId   → ciclo Activo más reciente del proyecto
+GET    /api/ciclos-prueba                    ?proyectoId&estado&pagina&porPagina  [filtrado por usuario]
+GET    /api/ciclos-prueba/activo/:proyectoId → ciclo Activo más reciente del proyecto
+GET    /api/ciclos-prueba/casos-previos/:proyectoId
+GET    /api/ciclos-prueba/:id/casos
 GET    /api/ciclos-prueba/:id
 POST   /api/ciclos-prueba
 PUT    /api/ciclos-prueba/:id
 PATCH  /api/ciclos-prueba/:id/cerrar
 PATCH  /api/ciclos-prueba/:id/reabrir
-DELETE /api/ciclos-prueba/:id          [solo si totalEjecuciones = 0]
+DELETE /api/ciclos-prueba/:id                [solo si totalEjecuciones = 0]
 ```
-> Roles gestión: `ADMIN`, `QA_LEAD`, `PROJECT_MANAGER`.
+> Roles gestión: `ADMIN`, `QA_LEAD`, `PROJECT_MANAGER`.  
+> Al crear: valida que no exista ya un ciclo `Activo` para el mismo proyecto — lanza `400` con nombre del ciclo activo.
 
 ### Ejecuciones
 ```
-GET    /api/ejecuciones        ?proyectoId&resultado&ambiente&testerId&pagina
+GET    /api/ejecuciones        ?proyectoId&resultado&ambiente&testerId&pagina  [filtrado por usuario]
 POST   /api/ejecuciones
 GET    /api/ejecuciones/caso-prueba/:id
 ```
@@ -144,7 +149,7 @@ GET    /api/ejecuciones/caso-prueba/:id
 
 ### Defectos
 ```
-GET    /api/defectos                         ?proyectoId&casoPruebaId&estado&severidad
+GET    /api/defectos                         ?proyectoId&casoPruebaId&estado&severidad&pagina  [filtrado por usuario]
 GET    /api/defectos/siguiente-codigo/:proyectoId   → próximo código INC-XXX
 GET    /api/defectos/:id
 POST   /api/defectos
@@ -155,6 +160,19 @@ DELETE /api/defectos/:id
 ```
 > Al crear: genera `codigo` global (`DEF-XXXX`) y `codigoProyecto` (`INC-XXX`) en transacción. Auto-vincula a la última ejecución `Fallido` sin defecto para el mismo `casoPruebaId`.
 
+### Planes de Prueba
+```
+GET    /api/planes-prueba                    ?proyectoId&estado&pagina&porPagina  [filtrado por usuario]
+GET    /api/planes-prueba/:id
+GET    /api/planes-prueba/:id/trazabilidad   → matriz req → caso → resultado → defecto
+POST   /api/planes-prueba
+PUT    /api/planes-prueba/:id
+PATCH  /api/planes-prueba/:id/cerrar
+PATCH  /api/planes-prueba/:id/reabrir
+DELETE /api/planes-prueba/:id
+```
+> Al crear un ciclo vinculado a un plan, el plan avanza automáticamente a estado `En ejecución`.
+
 ### Usuarios
 ```
 GET    /api/usuarios           ?rol&activo&busqueda&pagina
@@ -164,6 +182,13 @@ PUT    /api/usuarios/:id
 PATCH  /api/usuarios/:id/estado
 DELETE /api/usuarios/:id
 ```
+
+### Dashboard
+```
+GET    /api/dashboard/stats    → { resumen, casosPorEstado, defectosPorSeveridad, defectosPorEstado,
+                                    ultimasEjecuciones, ultimosDefectos }
+```
+> Stats de resumen y gráficas filtradas por usuario autenticado (non-admin solo ve datos de sus proyectos).
 
 ---
 
@@ -190,9 +215,11 @@ Los scripts en `database/init/` se ejecutan una sola vez al crear el contenedor 
 | `requerimientos` | Requerimientos por proyecto |
 | `casos_prueba` | Casos de prueba con pasos (jsonb) |
 | `ciclos_prueba` | Ciclos de prueba por proyecto (estado: Activo/Cerrado) |
+| `ciclo_casos_planificados` | Casos seleccionados para un ciclo con resultado anterior |
 | `ejecuciones_caso_prueba` | Ejecuciones; FK → ciclos_prueba.id (ciclo_id) |
 | `defectos` | Defectos con codigo (DEF) y codigo_proyecto (INC) |
 | `comentarios_defecto` | Comentarios de defectos |
+| `planes_prueba` | Planes de prueba con ciclos agrupados |
 | `auditoria_casos_prueba` | Historial de cambios en casos de prueba |
 
 > `DB_SYNC=false` en Docker — no usar `synchronize: true`. Aplicar cambios de esquema con ALTER TABLE o nuevos scripts SQL.
@@ -211,6 +238,25 @@ Los scripts en `database/init/` se ejecutan una sola vez al crear el contenedor 
 
 ## Reglas de Negocio Clave
 
+### Filtrado por usuario (non-admin)
+Todos los endpoints de lista aplican el siguiente filtro cuando `esAdmin = false`:
+```sql
+WHERE proyecto_id IN (
+  SELECT p.id FROM proyectos p
+  WHERE p.jefe_proyecto_id = :uid OR p.jefe_qa_id = :uid OR p.responsable_qa_id = :uid
+     OR EXISTS (SELECT 1 FROM casos_prueba cp WHERE cp.proyecto_id = p.id AND cp.responsable_qa_id = :uid)
+     OR EXISTS (SELECT 1 FROM defectos d  WHERE d.proyecto_id  = p.id AND (d.asignado_a = :uid OR d.reportado_por = :uid))
+)
+```
+Módulos con filtrado: `proyectos`, `requerimientos`, `casos-prueba`, `ciclos-prueba`, `ejecuciones`, `defectos`, `planes-prueba` y stats de `dashboard`.
+
+### Ciclo único activo por proyecto
+Al crear un ciclo, se verifica que no exista otro con `estado = 'Activo'` para el mismo proyecto:
+```typescript
+const cicloActivo = await repo.findOne({ where: { proyectoId, estado: EstadoCiclo.ACTIVO } });
+if (cicloActivo) throw new BadRequestException(`Ya existe el ciclo activo "${cicloActivo.nombre}"...`);
+```
+
 ### Códigos de defecto
 - `codigo`: global `DEF-{id padded 4}` — único en el sistema
 - `codigoProyecto`: por proyecto `INC-{count padded 3}` — único por proyecto
@@ -220,16 +266,13 @@ Los scripts en `database/init/` se ejecutan una sola vez al crear el contenedor 
 ```sql
 SELECT id FROM ejecuciones_caso_prueba
 WHERE caso_prueba_id = $1 AND resultado = 'Fallido' AND defecto_id IS NULL
-ORDER BY fecha DESC LIMIT 1
+ORDER BY creado_en DESC LIMIT 1
 ```
 Si existe, se actualiza `defecto_id` en esa ejecución dentro de la misma transacción.
 
-### Filtrado de proyectos por usuario
-```sql
-WHERE p.jefe_proyecto_id = :uid
-   OR p.jefe_qa_id = :uid
-   OR p.responsable_qa_id = :uid
-   OR EXISTS (SELECT 1 FROM casos_prueba cp WHERE cp.proyecto_id = p.id AND cp.responsable_qa_id = :uid)
-   OR EXISTS (SELECT 1 FROM defectos d WHERE d.proyecto_id = p.id AND (d.asignado_a = :uid OR d.reportado_por = :uid))
+### Trazabilidad de Plan
+El endpoint `GET /api/planes-prueba/:id/trazabilidad` devuelve la estructura completa:
 ```
-Solo aplicado cuando `esAdmin = false`.
+Plan → Ciclos → Requerimientos → Casos → Último resultado → Defecto vinculado
+```
+Usado por el frontend para generar la matriz visual y exportar a Word/CSV.
