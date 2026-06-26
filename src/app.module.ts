@@ -49,6 +49,7 @@ import { ReportesModule } from './reportes/reportes.module';
         password: config.get('DB_PASSWORD', 'postgres'),
         database: config.get('DB_DATABASE', 'sistema_qa'),
         ssl: config.get('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
+        extra: config.get('NODE_ENV') === 'production' ? { family: 4 } : {},
         entities: [
           Usuario,
           UsuarioRol,
