@@ -2,6 +2,8 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { NotificacionesModule } from './notificaciones/notificaciones.module';
 import { HealthController } from './health.controller';
 import { AuthModule } from './auth/auth.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
@@ -34,6 +36,7 @@ import { ReportesModule } from './reportes/reportes.module';
   controllers: [HealthController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -63,6 +66,7 @@ import { ReportesModule } from './reportes/reportes.module';
         logging: config.get('NODE_ENV') === 'development',
       }),
     }),
+    NotificacionesModule,
     ReportesModule,
     AuditoriaModule,
     CatalogosModule,

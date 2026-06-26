@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { EstadoProyecto, Proyecto } from './entities/proyecto.entity';
 import { CreateProyectoDto } from './dto/create-proyecto.dto';
 import { UpdateProyectoDto } from './dto/update-proyecto.dto';
 import { QueryProyectoDto } from './dto/query-proyecto.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { SharepointService } from '../sharepoint/sharepoint.service';
+import { MailService } from '../mail/mail.service';
 
 const TRANSICIONES_ESTADO: Record<EstadoProyecto, EstadoProyecto[]> = {
   [EstadoProyecto.POR_ESTIMAR]:   [EstadoProyecto.ESTIMADO],
@@ -24,6 +26,8 @@ export class ProyectosService {
     @InjectRepository(Proyecto)
     private proyectosRepo: Repository<Proyecto>,
     private sharepointService: SharepointService,
+    private mailService: MailService,
+    private config: ConfigService,
   ) {}
 
   async findAll(
@@ -185,7 +189,11 @@ export class ProyectosService {
     }
     this.validarFechasReales(dto.estado, dto.fechaInicioReal, dto.fechaFinReal);
     const proyecto = this.proyectosRepo.create({ ...dto, creadoPor });
-    return this.proyectosRepo.save(proyecto);
+    const saved = await this.proyectosRepo.save(proyecto);
+    if (dto.responsableQaId) {
+      this.enviarCorreoAsignacionQA(saved.id, false).catch(() => {});
+    }
+    return saved;
   }
 
   async update(id: number, dto: UpdateProyectoDto): Promise<Proyecto> {
@@ -198,9 +206,14 @@ export class ProyectosService {
     if (dto.estado && dto.estado !== proyecto.estado) {
       this.validarTransicionEstado(proyecto.estado, dto.estado);
     }
+    const responsableAnterior = proyecto.responsableQaId;
     Object.assign(proyecto, dto);
     this.validarFechasReales(proyecto.estado, proyecto.fechaInicioReal, proyecto.fechaFinReal);
-    return this.proyectosRepo.save(proyecto);
+    const saved = await this.proyectosRepo.save(proyecto);
+    if (dto.responsableQaId !== undefined && dto.responsableQaId !== responsableAnterior && dto.responsableQaId) {
+      this.enviarCorreoAsignacionQA(saved.id, responsableAnterior != null).catch(() => {});
+    }
+    return saved;
   }
 
   private validarTransicionEstado(estadoActual: EstadoProyecto, estadoNuevo: EstadoProyecto): void {
@@ -267,5 +280,80 @@ export class ProyectosService {
       responsableQa: undefined,
       creador:       undefined,
     };
+  }
+
+  private async enviarCorreoAsignacionQA(proyectoId: number, esReasignacion: boolean): Promise<void> {
+    const p = await this.proyectosRepo.findOne({
+      where: { id: proyectoId },
+      relations: ['responsableQa', 'jefeProyecto', 'jefeQa'],
+    });
+    if (!p?.responsableQa?.email) return;
+
+    const cc: string[] = [];
+    const emailQA = p.responsableQa.email;
+    if (p.jefeProyecto?.email && p.jefeProyecto.email !== emailQA) cc.push(p.jefeProyecto.email);
+    if (p.jefeQa?.email && p.jefeQa.email !== emailQA && p.jefeQa.email !== p.jefeProyecto?.email) {
+      cc.push(p.jefeQa.email);
+    }
+
+    const subject = esReasignacion
+      ? `[Proyecto Reasignado] ${p.codigo ?? p.nombre} — Responsable QA`
+      : `[Proyecto Asignado] ${p.codigo ?? p.nombre} — Responsable QA`;
+
+    await this.mailService.send({
+      to: emailQA,
+      cc: cc.length ? cc : undefined,
+      subject,
+      html: this.plantillaAsignacionQA(p, esReasignacion),
+    });
+  }
+
+  private plantillaAsignacionQA(p: Proyecto, esReasignacion: boolean): string {
+    const color = '#20c997';
+    const icono = esReasignacion ? '🔄' : '✅';
+    const titulo = esReasignacion ? 'Reasignado como Responsable QA' : 'Asignado como Responsable QA';
+    const mensaje = esReasignacion
+      ? `Has sido reasignado/a como <strong>Responsable QA</strong> en el siguiente proyecto.`
+      : `Has sido asignado/a como <strong>Responsable QA</strong> en el siguiente proyecto.`;
+    const qa = p.responsableQa!;
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
+    const linkProyecto = `${frontendUrl}/proyectos/${p.id}`;
+
+    const filas: [string, string][] = [
+      ['Código',          p.codigo                                               ?? '—'],
+      ['Proyecto',        p.nombre],
+      ['Cliente',         p.cliente],
+      ['Estado',          p.estado],
+      ['Jefe de Proyecto', p.jefeProyecto ? `${p.jefeProyecto.nombre} ${p.jefeProyecto.apellido}` : '—'],
+      ['Jefe QA',         p.jefeQa       ? `${p.jefeQa.nombre} ${p.jefeQa.apellido}`             : '—'],
+    ];
+    if (p.fechaInicioPlanificada) filas.push(['Inicio Planificado', String(p.fechaInicioPlanificada)]);
+    if (p.fechaFinPlanificada)    filas.push(['Fin Planificado',    String(p.fechaFinPlanificada)]);
+
+    const tableRows = filas.map(([label, value], i) => `
+      <tr style="background:${i % 2 === 0 ? '#fff' : '#f8f9fa'}">
+        <td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">${label}</td>
+        <td style="padding:8px;border:1px solid #dee2e6">${value}</td>
+      </tr>`).join('');
+
+    return `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:${color};padding:20px;border-radius:8px 8px 0 0">
+          <h2 style="color:#fff;margin:0">${icono} ${titulo}</h2>
+        </div>
+        <div style="background:#f8f9fa;padding:24px;border-radius:0 0 8px 8px">
+          <p>Hola <strong>${qa.nombre} ${qa.apellido}</strong>,</p>
+          <p>${mensaje}</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0">${tableRows}</table>
+          <div style="background:#d1f2eb;border-left:4px solid ${color};border-radius:0 6px 6px 0;padding:14px;margin:16px 0">
+            <strong>Responsabilidades:</strong> Como Responsable QA tendrás a cargo la gestión de casos de prueba, ejecuciones y defectos del proyecto.
+          </div>
+          <div style="margin:24px 0;text-align:center">
+            <a href="${linkProyecto}" style="background:${color};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Ver Proyecto en el Sistema</a>
+          </div>
+          <hr style="margin:16px 0;border:none;border-top:1px solid #dee2e6">
+          <p style="color:#6c757d;font-size:12px">Sistema QA — notificación automática</p>
+        </div>
+      </div>`;
   }
 }
