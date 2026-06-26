@@ -48,6 +48,7 @@ import { ReportesModule } from './reportes/reportes.module';
         username: config.get('DB_USERNAME', 'postgres'),
         password: config.get('DB_PASSWORD', 'postgres'),
         database: config.get('DB_DATABASE', 'sistema_qa'),
+        ssl: config.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         entities: [
           Usuario,
           UsuarioRol,
