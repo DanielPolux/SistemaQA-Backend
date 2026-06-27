@@ -39,7 +39,7 @@ export class CasosPruebaService {
       .leftJoin('c.creador',       'u' ).addSelect(['u.nombre', 'u.apellido'])
       .skip(skip)
       .take(porPagina)
-      .orderBy('c.creadoEn', 'DESC');
+      .orderBy('c.codigo', 'ASC');
 
     if (query.proyectoId)    qb.andWhere('c.proyectoId     = :pid',      { pid:    query.proyectoId });
     if (query.requerimientoId) qb.andWhere('c.requerimientoId = :rid',   { rid:    query.requerimientoId });
@@ -79,7 +79,7 @@ export class CasosPruebaService {
       .leftJoinAndSelect('c.requerimiento', 'r')
       .leftJoinAndSelect('c.responsableQa', 'rq')
       .where('c.proyectoId = :pid', { pid: proyectoId })
-      .orderBy('c.creadoEn', 'DESC')
+      .orderBy('c.codigo', 'ASC')
       .getMany();
   }
 
