@@ -74,7 +74,13 @@ export class CasosPruebaService {
   }
 
   async findByProyecto(proyectoId: number): Promise<CasoPrueba[]> {
-    return this.casosRepo.find({ where: { proyectoId }, order: { creadoEn: 'DESC' } });
+    return this.casosRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.requerimiento', 'r')
+      .leftJoinAndSelect('c.responsableQa', 'rq')
+      .where('c.proyectoId = :pid', { pid: proyectoId })
+      .orderBy('c.creadoEn', 'DESC')
+      .getMany();
   }
 
   async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {

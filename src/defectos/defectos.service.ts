@@ -114,7 +114,14 @@ export class DefectosService {
   }
 
   async findByCasoPrueba(casoPruebaId: number): Promise<Defecto[]> {
-    return this.defectosRepo.find({ where: { casoPruebaId }, order: { creadoEn: 'DESC' } });
+    return this.defectosRepo
+      .createQueryBuilder('d')
+      .leftJoinAndSelect('d.asignado', 'a')
+      .leftJoinAndSelect('d.reportador', 'r')
+      .leftJoinAndSelect('d.proyecto', 'p')
+      .where('d.casoPruebaId = :id', { id: casoPruebaId })
+      .orderBy('d.creadoEn', 'DESC')
+      .getMany();
   }
 
   async create(dto: CreateDefectoDto, reportadoPor: number, usuarioNombre?: string): Promise<Defecto> {

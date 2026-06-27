@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -28,23 +28,28 @@ export class CreateDefectoDto {
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(300)
   titulo: string;
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   descripcion: string;
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   pasosReproduccion: string;
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   resultadoObtenido: string;
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   resultadoEsperado: string;
 
   @ApiProperty({ enum: AmbienteDefecto })
@@ -53,6 +58,7 @@ export class CreateDefectoDto {
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
   version: string;
 

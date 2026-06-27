@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -22,11 +23,13 @@ export class CreateProyectoDto {
 
   @ApiProperty({ description: 'Nombre completo del proyecto' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   nombre: string;
 
   @ApiProperty({ description: 'Cliente asociado al proyecto' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   cliente: string;
 

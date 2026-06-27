@@ -79,10 +79,12 @@ export class RequerimientosService {
   }
 
   async findByProyecto(proyectoId: number): Promise<Requerimiento[]> {
-    return this.requerimientosRepo.find({
-      where: { proyectoId },
-      order: { creadoEn: 'DESC' },
-    });
+    return this.requerimientosRepo
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.creador', 'u')
+      .where('r.proyectoId = :pid', { pid: proyectoId })
+      .orderBy('r.creadoEn', 'DESC')
+      .getMany();
   }
 
   async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
