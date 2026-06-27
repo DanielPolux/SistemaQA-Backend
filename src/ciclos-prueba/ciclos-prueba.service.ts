@@ -101,10 +101,13 @@ export class CiclosPruebaService {
          cp.pasos,
          cp.resultado_esperado AS "resultadoEsperado",
          cp.proyecto_id        AS "proyectoId",
+         cp.requerimiento_id   AS "requerimientoId",
+         r.estado              AS "requerimientoEstado",
          ue.resultado          AS "resultadoCiclo",
          ue.ejecucion_id       AS "ejecucionId",
          ue.creado_en          AS "fechaEjecucion"
        FROM casos_prueba cp
+       LEFT JOIN requerimientos r  ON r.id = cp.requerimiento_id
        LEFT JOIN planificados pl ON pl.caso_prueba_id = cp.id
        LEFT JOIN ultima_ejec ue  ON ue.caso_prueba_id = cp.id
        WHERE (

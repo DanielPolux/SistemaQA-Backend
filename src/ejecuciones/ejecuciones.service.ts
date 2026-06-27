@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { EjecucionCasoPrueba, ResultadoEjecucion } from './entities/ejecucion-caso-prueba.entity';
@@ -24,7 +24,52 @@ export class EjecucionesService {
     private defectosService: DefectosService,
   ) {}
 
+  private async validarPrecondicionesEjecucion(casoPruebaId: number, proyectoId: number): Promise<void> {
+    const [proyecto] = await this.dataSource.manager.query(
+      'SELECT estado FROM proyectos WHERE id = $1',
+      [proyectoId],
+    );
+    if (!proyecto || proyecto.estado !== 'En Ejecución') {
+      throw new BadRequestException(
+        `El proyecto no está en estado "En Ejecución". Estado actual: "${proyecto?.estado ?? 'desconocido'}". Cambia el estado del proyecto antes de registrar ejecuciones.`,
+      );
+    }
+
+    const [casoPrueba] = await this.dataSource.manager.query(
+      'SELECT requerimiento_id FROM casos_prueba WHERE id = $1',
+      [casoPruebaId],
+    );
+    if (casoPrueba?.requerimiento_id) {
+      const [req] = await this.dataSource.manager.query(
+        'SELECT estado FROM requerimientos WHERE id = $1',
+        [casoPrueba.requerimiento_id],
+      );
+      if (req && req.estado !== 'Aprobado') {
+        throw new BadRequestException(
+          `El requerimiento asociado al caso de prueba no está Aprobado. Estado actual: "${req.estado}". Aprueba el requerimiento antes de ejecutar el caso.`,
+        );
+      }
+    }
+
+    const [ciclo] = await this.dataSource.manager.query(
+      `SELECT id, plan_prueba_id FROM ciclos_prueba
+       WHERE proyecto_id = $1 AND estado = 'Activo'
+       ORDER BY creado_en DESC LIMIT 1`,
+      [proyectoId],
+    );
+    if (!ciclo) {
+      throw new BadRequestException('No hay un ciclo de prueba activo para este proyecto.');
+    }
+    if (!ciclo.plan_prueba_id) {
+      throw new BadRequestException(
+        'El ciclo de prueba activo no está vinculado a un plan de prueba. Asocia el ciclo a un plan antes de registrar ejecuciones.',
+      );
+    }
+  }
+
   async create(dto: CreateEjecucionDto, reportadoPor?: number, usuarioNombre?: string): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
+    await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId);
+
     const { defectoData, ...ejecucionFields } = dto;
     const esFallido = ejecucionFields.resultado === ResultadoEjecucion.FALLIDO;
 
