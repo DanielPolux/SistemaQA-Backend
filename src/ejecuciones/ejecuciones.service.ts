@@ -24,7 +24,7 @@ export class EjecucionesService {
     private defectosService: DefectosService,
   ) {}
 
-  private async validarPrecondicionesEjecucion(casoPruebaId: number, proyectoId: number): Promise<void> {
+  private async validarPrecondicionesEjecucion(casoPruebaId: number, proyectoId: number, cicloId?: number): Promise<void> {
     const [proyecto] = await this.dataSource.manager.query(
       'SELECT estado FROM proyectos WHERE id = $1',
       [proyectoId],
@@ -51,24 +51,31 @@ export class EjecucionesService {
       }
     }
 
-    const [ciclo] = await this.dataSource.manager.query(
-      `SELECT id, plan_prueba_id FROM ciclos_prueba
-       WHERE proyecto_id = $1 AND estado = 'Activo'
-       ORDER BY creado_en DESC LIMIT 1`,
-      [proyectoId],
-    );
+    // Use the explicit cicloId when provided (ciclo-ejecucion flow); otherwise find the active cycle
+    const [ciclo] = cicloId
+      ? await this.dataSource.manager.query(
+          'SELECT id, nombre, plan_prueba_id FROM ciclos_prueba WHERE id = $1',
+          [cicloId],
+        )
+      : await this.dataSource.manager.query(
+          `SELECT id, nombre, plan_prueba_id FROM ciclos_prueba
+           WHERE proyecto_id = $1 AND estado = 'Activo'
+           ORDER BY creado_en DESC LIMIT 1`,
+          [proyectoId],
+        );
+
     if (!ciclo) {
       throw new BadRequestException('No hay un ciclo de prueba activo para este proyecto.');
     }
     if (!ciclo.plan_prueba_id) {
       throw new BadRequestException(
-        'El ciclo de prueba activo no está vinculado a un plan de prueba. Asocia el ciclo a un plan antes de registrar ejecuciones.',
+        `El ciclo "${ciclo.nombre}" no está vinculado a un plan de prueba. Asocia el ciclo a un plan antes de registrar ejecuciones.`,
       );
     }
   }
 
   async create(dto: CreateEjecucionDto, reportadoPor?: number, usuarioNombre?: string): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
-    await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId);
+    await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId);
 
     const { defectoData, ...ejecucionFields } = dto;
     const esFallido = ejecucionFields.resultado === ResultadoEjecucion.FALLIDO;
