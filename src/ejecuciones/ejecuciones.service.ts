@@ -25,33 +25,46 @@ export class EjecucionesService {
   ) {}
 
   private async validarPrecondicionesEjecucion(casoPruebaId: number, proyectoId: number, cicloId?: number): Promise<void> {
+    // ── 1. Proyecto: debe existir y estar En Ejecución ───────────────────────
     const [proyecto] = await this.dataSource.manager.query(
-      'SELECT estado FROM proyectos WHERE id = $1',
+      'SELECT id, estado FROM proyectos WHERE id = $1',
       [proyectoId],
     );
-    if (!proyecto || proyecto.estado !== 'En Ejecución') {
+    if (!proyecto) {
+      throw new BadRequestException('El proyecto no existe o fue eliminado.');
+    }
+    if (proyecto.estado !== 'En Ejecución') {
       throw new BadRequestException(
-        `El proyecto no está en estado "En Ejecución". Estado actual: "${proyecto?.estado ?? 'desconocido'}". Cambia el estado del proyecto antes de registrar ejecuciones.`,
+        `El proyecto no está en estado "En Ejecución". Estado actual: "${proyecto.estado}". Cambia el estado del proyecto antes de registrar ejecuciones.`,
       );
     }
 
+    // ── 2. Caso de prueba: debe existir ──────────────────────────────────────
     const [casoPrueba] = await this.dataSource.manager.query(
-      'SELECT requerimiento_id FROM casos_prueba WHERE id = $1',
+      'SELECT id, requerimiento_id FROM casos_prueba WHERE id = $1',
       [casoPruebaId],
     );
-    if (casoPrueba?.requerimiento_id) {
+    if (!casoPrueba) {
+      throw new BadRequestException('El caso de prueba no existe o fue eliminado.');
+    }
+
+    // ── 3. Requerimiento: si está vinculado, debe existir y estar Aprobado ───
+    if (casoPrueba.requerimiento_id) {
       const [req] = await this.dataSource.manager.query(
-        'SELECT estado FROM requerimientos WHERE id = $1',
+        'SELECT id, estado FROM requerimientos WHERE id = $1',
         [casoPrueba.requerimiento_id],
       );
-      if (req && req.estado !== 'Aprobado') {
+      if (!req) {
+        throw new BadRequestException('El requerimiento asociado al caso de prueba no existe o fue eliminado.');
+      }
+      if (req.estado !== 'Aprobado') {
         throw new BadRequestException(
-          `El requerimiento asociado al caso de prueba no está Aprobado. Estado actual: "${req.estado}". Aprueba el requerimiento antes de ejecutar el caso.`,
+          `El requerimiento asociado no está Aprobado. Estado actual: "${req.estado}". Aprueba el requerimiento antes de ejecutar el caso.`,
         );
       }
     }
 
-    // Use the explicit cicloId when provided (ciclo-ejecucion flow); otherwise find the active cycle
+    // ── 4. Ciclo: debe existir ────────────────────────────────────────────────
     const [ciclo] = cicloId
       ? await this.dataSource.manager.query(
           'SELECT id, nombre, plan_prueba_id FROM ciclos_prueba WHERE id = $1',
@@ -65,11 +78,26 @@ export class EjecucionesService {
         );
 
     if (!ciclo) {
-      throw new BadRequestException('No hay un ciclo de prueba activo para este proyecto.');
+      throw new BadRequestException(
+        cicloId
+          ? 'El ciclo de prueba no existe o fue eliminado.'
+          : 'No hay un ciclo de prueba activo para este proyecto.',
+      );
     }
+
+    // ── 5. Plan: el ciclo debe tener un plan vinculado que exista ────────────
     if (!ciclo.plan_prueba_id) {
       throw new BadRequestException(
         `El ciclo "${ciclo.nombre}" no está vinculado a un plan de prueba. Asocia el ciclo a un plan antes de registrar ejecuciones.`,
+      );
+    }
+    const [plan] = await this.dataSource.manager.query(
+      'SELECT id FROM planes_prueba WHERE id = $1',
+      [ciclo.plan_prueba_id],
+    );
+    if (!plan) {
+      throw new BadRequestException(
+        `El plan de prueba vinculado al ciclo "${ciclo.nombre}" no existe o fue eliminado. Asocia el ciclo a un plan vigente antes de registrar ejecuciones.`,
       );
     }
   }
