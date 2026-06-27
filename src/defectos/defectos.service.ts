@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -20,6 +20,8 @@ const CAMPOS_AUDIT_DEFECTO = ['titulo', 'descripcion', 'severidad', 'prioridad',
 
 @Injectable()
 export class DefectosService {
+  private readonly logger = new Logger(DefectosService.name);
+
   constructor(
     @InjectRepository(Defecto)
     private defectosRepo: Repository<Defecto>,
@@ -157,7 +159,9 @@ export class DefectosService {
       accion:        'Creado',
     });
 
-    this.enviarCorreoNuevoDefecto(saved).catch(() => {});
+    this.enviarCorreoNuevoDefecto(saved).catch(err =>
+      this.logger.warn(`enviarCorreoNuevoDefecto defecto#${saved.id}: ${err?.message ?? err}`),
+    );
     return saved;
   }
 
@@ -199,7 +203,9 @@ export class DefectosService {
     );
 
     if (dto.asignadoA !== undefined && dto.asignadoA !== asignadoAnterior && dto.asignadoA) {
-      this.enviarCorreoNuevoDefecto(saved, true).catch(() => {});
+      this.enviarCorreoNuevoDefecto(saved, true).catch(err =>
+        this.logger.warn(`enviarCorreoNuevoDefecto (reasignación) defecto#${saved.id}: ${err?.message ?? err}`),
+      );
     }
 
     return saved;
@@ -247,7 +253,9 @@ export class DefectosService {
       valorNuevo:    dto.estado,
     });
 
-    this.enviarCorreoCambioEstado(saved, dto.estado).catch(() => {});
+    this.enviarCorreoCambioEstado(saved, dto.estado).catch(err =>
+      this.logger.warn(`enviarCorreoCambioEstado defecto#${saved.id}: ${err?.message ?? err}`),
+    );
 
     return saved;
   }
@@ -295,7 +303,9 @@ export class DefectosService {
       valorNuevo:    estadoDesarrollo,
     });
 
-    this.enviarCorreoEstadoDesarrollo(saved, estadoDesarrollo).catch(() => {});
+    this.enviarCorreoEstadoDesarrollo(saved, estadoDesarrollo).catch(err =>
+      this.logger.warn(`enviarCorreoEstadoDesarrollo defecto#${saved.id}: ${err?.message ?? err}`),
+    );
     return saved;
   }
 

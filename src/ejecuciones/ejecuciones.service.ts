@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { EjecucionCasoPrueba, ResultadoEjecucion } from './entities/ejecucion-caso-prueba.entity';
@@ -12,6 +12,8 @@ import { DefectosService } from '../defectos/defectos.service';
 
 @Injectable()
 export class EjecucionesService {
+  private readonly logger = new Logger(EjecucionesService.name);
+
   constructor(
     @InjectRepository(EjecucionCasoPrueba)
     private repo: Repository<EjecucionCasoPrueba>,
@@ -78,7 +80,9 @@ export class EjecucionesService {
       accion:        'Creado',
     });
 
-    this.defectosService.enviarCorreoNuevoDefecto(resultado.defectoFinal).catch(() => {});
+    this.defectosService.enviarCorreoNuevoDefecto(resultado.defectoFinal).catch(err =>
+      this.logger.warn(`enviarCorreoNuevoDefecto ejecución→defecto#${resultado.defectoFinal.id}: ${err?.message ?? err}`),
+    );
 
     return { ...resultado.ejecucionGuardada, defecto: resultado.defectoFinal };
   }

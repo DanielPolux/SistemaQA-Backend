@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +22,8 @@ const TRANSICIONES_ESTADO: Record<EstadoProyecto, EstadoProyecto[]> = {
 
 @Injectable()
 export class ProyectosService {
+  private readonly logger = new Logger(ProyectosService.name);
+
   constructor(
     @InjectRepository(Proyecto)
     private proyectosRepo: Repository<Proyecto>,
@@ -191,7 +193,9 @@ export class ProyectosService {
     const proyecto = this.proyectosRepo.create({ ...dto, creadoPor });
     const saved = await this.proyectosRepo.save(proyecto);
     if (dto.responsableQaId) {
-      this.enviarCorreoAsignacionQA(saved.id, false).catch(() => {});
+      this.enviarCorreoAsignacionQA(saved.id, false).catch(err =>
+        this.logger.warn(`enviarCorreoAsignacionQA proyecto#${saved.id}: ${err?.message ?? err}`),
+      );
     }
     return saved;
   }
@@ -211,7 +215,9 @@ export class ProyectosService {
     this.validarFechasReales(proyecto.estado, proyecto.fechaInicioReal, proyecto.fechaFinReal);
     const saved = await this.proyectosRepo.save(proyecto);
     if (dto.responsableQaId !== undefined && dto.responsableQaId !== responsableAnterior && dto.responsableQaId) {
-      this.enviarCorreoAsignacionQA(saved.id, responsableAnterior != null).catch(() => {});
+      this.enviarCorreoAsignacionQA(saved.id, responsableAnterior != null).catch(err =>
+        this.logger.warn(`enviarCorreoAsignacionQA (reasignación) proyecto#${saved.id}: ${err?.message ?? err}`),
+      );
     }
     return saved;
   }
@@ -300,12 +306,16 @@ export class ProyectosService {
       ? `[Proyecto Reasignado] ${p.codigo ?? p.nombre} — Responsable QA`
       : `[Proyecto Asignado] ${p.codigo ?? p.nombre} — Responsable QA`;
 
-    await this.mailService.send({
-      to: emailQA,
-      cc: cc.length ? cc : undefined,
-      subject,
-      html: this.plantillaAsignacionQA(p, esReasignacion),
-    });
+    try {
+      await this.mailService.send({
+        to: emailQA,
+        cc: cc.length ? cc : undefined,
+        subject,
+        html: this.plantillaAsignacionQA(p, esReasignacion),
+      });
+    } catch (err) {
+      this.logger.warn(`enviarCorreoAsignacionQA send error proyecto#${p.id}: ${(err as Error)?.message ?? err}`);
+    }
   }
 
   private plantillaAsignacionQA(p: Proyecto, esReasignacion: boolean): string {
