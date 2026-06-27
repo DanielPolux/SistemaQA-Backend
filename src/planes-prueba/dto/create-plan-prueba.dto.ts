@@ -32,18 +32,6 @@ export class CreatePlanPruebaDto {
 
   @IsOptional()
   @IsString()
-  criteriosEntrada?: string;
-
-  @IsOptional()
-  @IsString()
-  criteriosSalida?: string;
-
-  @IsOptional()
-  @IsString()
-  riesgos?: string;
-
-  @IsOptional()
-  @IsString()
   @MaxLength(100)
   sprint?: string;
 
