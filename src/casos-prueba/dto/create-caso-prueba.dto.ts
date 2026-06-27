@@ -32,6 +32,12 @@ class PasoDto {
 }
 
 export class CreateCasoPruebaDto {
+  @ApiPropertyOptional({ description: 'Código del Caso de Prueba (CP-001). Se auto-genera si se omite.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  codigo?: string;
+
   @ApiProperty({ description: 'Nombre del Caso de Prueba' })
   @IsString()
   @MaxLength(300)

@@ -129,7 +129,9 @@ GET    /api/casos-prueba/:id
 POST   /api/casos-prueba
 PUT    /api/casos-prueba/:id
 DELETE /api/casos-prueba/:id
+POST   /api/casos-prueba/importar   → importación masiva desde Excel ({ casos: CreateCasoPruebaDto[] })
 ```
+> Al importar: resuelve `requerimientoRf` (código texto) a `requerimientoId` (FK) consultando los requerimientos del proyecto. Respeta el campo `codigo` del DTO si viene provisto; lo auto-genera (`CP-XXX`) solo si está vacío. Retorna `{ importados, errores[] }` con el detalle por fila.
 
 ### Ciclos de Prueba
 ```

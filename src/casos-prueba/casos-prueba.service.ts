@@ -95,22 +95,27 @@ export class CasosPruebaService {
   }
 
   async create(dto: CreateCasoPruebaDto, creadoPor: number, usuarioNombre?: string): Promise<CasoPrueba> {
-    const [{ max_num }] = await this.casosRepo.manager.query(
-      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
-       FROM casos_prueba
-       WHERE proyecto_id = $1 AND codigo_cp ~ '^CP[0-9]+$'`,
-      [dto.proyectoId],
-    );
-    const codigoGenerado = `CP${String(Number(max_num) + 1).padStart(3, '0')}`;
+    let codigo: string;
+    if (dto.codigo?.trim()) {
+      codigo = dto.codigo.trim();
+    } else {
+      const [{ max_num }] = await this.casosRepo.manager.query(
+        `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
+         FROM casos_prueba
+         WHERE proyecto_id = $1 AND codigo_cp ~ '^CP[0-9]+$'`,
+        [dto.proyectoId],
+      );
+      codigo = `CP${String(Number(max_num) + 1).padStart(3, '0')}`;
+    }
 
-    const caso = this.casosRepo.create({ ...dto, creadoPor, codigo: codigoGenerado });
+    const caso = this.casosRepo.create({ ...dto, creadoPor, codigo });
     let saved: CasoPrueba;
     try {
       saved = await this.casosRepo.save(caso);
     } catch (e: any) {
       if (e?.code === '23505') {
         throw new BadRequestException(
-          `El código "${codigoGenerado}" ya está en uso en este proyecto. Intenta de nuevo.`,
+          `El código "${codigo}" ya está en uso en este proyecto. Intenta de nuevo.`,
         );
       }
       throw e;
@@ -177,9 +182,37 @@ export class CasosPruebaService {
     let importados = 0;
     const errores: { fila: number; mensaje: string }[] = [];
 
+    // Build lookup map requerimientoRf → requerimientoId for all projects in the batch
+    const rfMap = new Map<string, number>(); // key: "proyectoId:rfCodigo"
+    const casosConRf = dto.casos.filter(c => c.requerimientoRf && !c.requerimientoId);
+    if (casosConRf.length > 0) {
+      const proyIds = [...new Set(casosConRf.map(c => c.proyectoId))];
+      const reqs: { id: number; codigo: string; proyecto_id: number }[] =
+        await this.casosRepo.manager.query(
+          `SELECT id, codigo, proyecto_id FROM requerimientos WHERE proyecto_id = ANY($1::int[])`,
+          [proyIds],
+        );
+      for (const r of reqs) {
+        rfMap.set(`${r.proyecto_id}:${r.codigo}`, r.id);
+      }
+    }
+
     for (let i = 0; i < dto.casos.length; i++) {
+      const caso = { ...dto.casos[i] };
+
+      // Resolve requerimientoId from requerimientoRf if not already provided
+      if (caso.requerimientoRf && !caso.requerimientoId) {
+        const rid = rfMap.get(`${caso.proyectoId}:${caso.requerimientoRf}`);
+        if (rid) {
+          caso.requerimientoId = rid;
+        } else {
+          errores.push({ fila: i + 1, mensaje: `Requerimiento "${caso.requerimientoRf}" no existe en el proyecto` });
+          continue;
+        }
+      }
+
       try {
-        await this.create(dto.casos[i], creadoPor, usuarioNombre);
+        await this.create(caso, creadoPor, usuarioNombre);
         importados++;
       } catch (e: any) {
         errores.push({ fila: i + 1, mensaje: e?.message ?? 'Error desconocido' });
