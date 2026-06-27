@@ -13,6 +13,7 @@ import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { CreateComentarioDto } from './dto/create-comentario.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { MailService } from '../mail/mail.service';
+import { userProjectFilter } from '../common/helpers/user-access.helper';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 
 const CAMPOS_AUDIT_DEFECTO = ['titulo', 'descripcion', 'severidad', 'prioridad', 'asignadoA', 'estado'];
@@ -60,15 +61,7 @@ export class DefectosService {
     }
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(
-        `(d.proyectoId IN (
-          SELECT pr.id FROM proyectos pr
-          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
-             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
-             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
-        ) OR d.asignadoA = :uid OR d.reportadoPor = :uid)`,
-        { uid: usuarioId },
-      );
+      qb.andWhere(userProjectFilter('d', 'd.asignadoA = :uid OR d.reportadoPor = :uid'), { uid: usuarioId });
     }
 
     const [defectos, total] = await qb.getManyAndCount();

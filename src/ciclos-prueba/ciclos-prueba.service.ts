@@ -5,6 +5,7 @@ import { CicloPrueba, EstadoCiclo } from './entities/ciclo-prueba.entity';
 import { CreateCicloPruebaDto } from './dto/create-ciclo-prueba.dto';
 import { QueryCicloPruebaDto } from './dto/query-ciclo-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { userProjectFilter } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class CiclosPruebaService {
@@ -15,7 +16,7 @@ export class CiclosPruebaService {
 
   async findAll(query: QueryCicloPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
-    const porPagina = Number(query.porPagina) || 15;
+    const porPagina = Number(query.porPagina) || 10;
     const skip      = (pagina - 1) * porPagina;
 
     const qb = this.repo
@@ -31,15 +32,7 @@ export class CiclosPruebaService {
     if (query.estado)     qb.andWhere('c.estado = :estado', { estado: query.estado });
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(
-        `c.proyectoId IN (
-          SELECT pr.id FROM proyectos pr
-          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
-             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
-             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
-        )`,
-        { uid: usuarioId },
-      );
+      qb.andWhere(userProjectFilter('c'), { uid: usuarioId });
     }
 
     const [items, total] = await qb.getManyAndCount();

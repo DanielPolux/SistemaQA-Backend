@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlanPrueba, EstadoPlan } from './entities/plan-prueba.entity';
 import { CreatePlanPruebaDto } from './dto/create-plan-prueba.dto';
+import { userProjectFilter } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class PlanesPruebaService {
@@ -13,7 +14,7 @@ export class PlanesPruebaService {
 
   async findAll(query: { proyectoId?: number; estado?: string; pagina?: number; porPagina?: number }, usuarioId?: number, esAdmin = true): Promise<any> {
     const pagina    = Number(query.pagina)    || 1;
-    const porPagina = Number(query.porPagina) || 15;
+    const porPagina = Number(query.porPagina) || 10;
     const skip      = (pagina - 1) * porPagina;
 
     const qb = this.repo
@@ -28,15 +29,7 @@ export class PlanesPruebaService {
     if (query.estado)     qb.andWhere('p.estado = :estado', { estado: query.estado });
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(
-        `p.proyectoId IN (
-          SELECT pr2.id FROM proyectos pr2
-          WHERE pr2.jefe_proyecto_id = :uid OR pr2.jefe_qa_id = :uid OR pr2.responsable_qa_id = :uid
-             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr2.id AND cp2.responsable_qa_id = :uid)
-             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr2.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
-        )`,
-        { uid: usuarioId },
-      );
+      qb.andWhere(userProjectFilter('p'), { uid: usuarioId });
     }
 
     const [items, total] = await qb.getManyAndCount();

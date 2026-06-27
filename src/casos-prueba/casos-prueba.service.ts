@@ -9,6 +9,7 @@ import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
 import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { userProjectFilter } from '../common/helpers/user-access.helper';
 
 const CAMPOS_AUDIT = [
   'nombre', 'codigo', 'tipo', 'descripcion', 'resultadoEsperado',
@@ -54,15 +55,7 @@ export class CasosPruebaService {
     }
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(
-        `(c.proyectoId IN (
-          SELECT pr.id FROM proyectos pr
-          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
-             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
-             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
-        ) OR c.responsableQaId = :uid)`,
-        { uid: usuarioId },
-      );
+      qb.andWhere(userProjectFilter('c', 'c.responsableQaId = :uid'), { uid: usuarioId });
     }
 
     const [casos, total] = await qb.getManyAndCount();
