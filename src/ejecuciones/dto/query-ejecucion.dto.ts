@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryEjecucionDto {
@@ -21,6 +21,14 @@ export class QueryEjecucionDto {
   @IsOptional()
   @Type(() => Number)
   testerId?: number;
+
+  @IsOptional()
+  @IsDateString()
+  fechaDesde?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaHasta?: string;
 
   @IsOptional()
   @Type(() => Number)

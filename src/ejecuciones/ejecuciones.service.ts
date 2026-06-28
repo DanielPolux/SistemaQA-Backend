@@ -202,6 +202,8 @@ export class EjecucionesService {
     if (query.resultado)    qb.andWhere('e.resultado     = :res',  { res:  query.resultado });
     if (query.ambiente)     qb.andWhere('e.ambiente      = :amb',  { amb:  query.ambiente });
     if (query.testerId)     qb.andWhere('e.testerId      = :tid',  { tid:  query.testerId });
+    if (query.fechaDesde)   qb.andWhere('e.creadoEn     >= :fdesde', { fdesde: query.fechaDesde });
+    if (query.fechaHasta)   qb.andWhere('e.creadoEn     <= :fhasta', { fhasta: query.fechaHasta + 'T23:59:59' });
 
     if (!esAdmin && usuarioId) {
       qb.andWhere(
