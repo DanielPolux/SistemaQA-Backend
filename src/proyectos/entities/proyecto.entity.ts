@@ -9,14 +9,6 @@ import {
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
-export interface DocumentoRequerimiento {
-  itemId: string;
-  nombre: string;
-  url: string;
-  tamano: number;
-  subidoEn: string;
-}
-
 export enum EstadoProyecto {
   POR_ESTIMAR   = 'Por estimar',
   ESTIMADO      = 'Estimado',
@@ -94,9 +86,9 @@ export class Proyecto {
   @Column({ name: 'documento_url', nullable: true, length: 500 })
   documentoUrl: string;
 
-  /** Documentos de requerimientos almacenados en SharePoint */
-  @Column({ name: 'documentos_requerimientos', type: 'jsonb', nullable: true, default: [] })
-  documentosRequerimientos: DocumentoRequerimiento[];
+  /** Ruta de la carpeta SharePoint donde se almacenan las evidencias del proyecto */
+  @Column({ name: 'ruta_sharepoint', nullable: true, length: 1000 })
+  rutaSharepoint: string;
 
   /** Notas y observaciones generales */
   @Column({ type: 'text', nullable: true })

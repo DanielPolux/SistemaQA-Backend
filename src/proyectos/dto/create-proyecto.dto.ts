@@ -90,6 +90,12 @@ export class CreateProyectoDto {
   @MaxLength(500)
   documentoUrl?: string;
 
+  @ApiProperty({ description: 'Ruta de la carpeta SharePoint donde se almacenan las evidencias del proyecto' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  rutaSharepoint: string;
+
   @ApiPropertyOptional({ description: 'Notas y observaciones' })
   @IsOptional()
   @IsString()

@@ -7,7 +7,6 @@ import { CreateProyectoDto } from './dto/create-proyecto.dto';
 import { UpdateProyectoDto } from './dto/update-proyecto.dto';
 import { QueryProyectoDto } from './dto/query-proyecto.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
-import { SharepointService } from '../sharepoint/sharepoint.service';
 import { MailService } from '../mail/mail.service';
 
 const TRANSICIONES_ESTADO: Record<EstadoProyecto, EstadoProyecto[]> = {
@@ -27,7 +26,6 @@ export class ProyectosService {
   constructor(
     @InjectRepository(Proyecto)
     private proyectosRepo: Repository<Proyecto>,
-    private sharepointService: SharepointService,
     private mailService: MailService,
     private config: ConfigService,
   ) {}
@@ -241,32 +239,6 @@ export class ProyectosService {
         'Para poner el proyecto En Ejecución debe ingresar la Fecha Inicio Real y Fecha Fin Real (Entrega).',
       );
     }
-  }
-
-  async subirDocumento(id: number, archivo: Express.Multer.File): Promise<Proyecto> {
-    const proyecto = await this.proyectosRepo.findOne({ where: { id } });
-    if (!proyecto) throw new NotFoundException(`Proyecto #${id} no encontrado`);
-
-    const doc = await this.sharepointService.subirArchivo(
-      proyecto.codigo ?? String(proyecto.id),
-      proyecto.nombre,
-      archivo.buffer,
-      archivo.originalname,
-      archivo.mimetype,
-    );
-
-    proyecto.documentosRequerimientos = [...(proyecto.documentosRequerimientos ?? []), doc];
-    return this.proyectosRepo.save(proyecto);
-  }
-
-  async eliminarDocumento(id: number, itemId: string): Promise<Proyecto> {
-    const proyecto = await this.proyectosRepo.findOne({ where: { id } });
-    if (!proyecto) throw new NotFoundException(`Proyecto #${id} no encontrado`);
-
-    await this.sharepointService.eliminarArchivo(itemId);
-    proyecto.documentosRequerimientos = (proyecto.documentosRequerimientos ?? [])
-      .filter(d => d.itemId !== itemId);
-    return this.proyectosRepo.save(proyecto);
   }
 
   async remove(id: number): Promise<void> {

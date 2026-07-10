@@ -7,13 +7,8 @@ import {
   Post,
   Put,
   Query,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import { ApiConsumes } from '@nestjs/swagger';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -81,33 +76,6 @@ export class ProyectosController {
   @ApiOperation({ summary: 'Eliminar proyecto' })
   remove(@Param('id') id: string) {
     return this.proyectosService.remove(+id);
-  }
-
-  @Post(':id/documentos')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
-  @UseInterceptors(FileInterceptor('archivo', {
-    storage: memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
-  }))
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Subir documento de requerimientos a SharePoint' })
-  subirDocumento(
-    @Param('id') id: string,
-    @UploadedFile() archivo: Express.Multer.File,
-  ) {
-    return this.proyectosService.subirDocumento(+id, archivo);
-  }
-
-  @Delete(':id/documentos/:itemId')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_ESCRITURA)
-  @ApiOperation({ summary: 'Eliminar documento de requerimientos de SharePoint' })
-  eliminarDocumento(
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
-  ) {
-    return this.proyectosService.eliminarDocumento(+id, itemId);
   }
 
   @Get(':proyectoId/requerimientos')
