@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Post,
   Put,
@@ -74,6 +75,15 @@ export class CasosPruebaController {
   @ApiOperation({ summary: 'Actualizar caso de prueba' })
   update(@Param('id') id: string, @Body() dto: UpdateCasoPruebaDto, @CurrentUser() user: Usuario) {
     return this.casosPruebaService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
+  }
+
+  @Delete('bulk')
+  @HttpCode(200)
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_ESCRITURA)
+  @ApiOperation({ summary: 'Eliminar múltiples casos de prueba' })
+  removeMany(@Body() body: { ids: number[] }) {
+    return this.casosPruebaService.removeMany(body.ids);
   }
 
   @Delete(':id')

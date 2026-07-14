@@ -36,9 +36,9 @@ export class RequerimientosController {
   }
 
   @Get('next-codigo')
-  @ApiOperation({ summary: 'Previsualizar el próximo código RF para un proyecto' })
-  nextCodigo(@Query('proyectoId') proyectoId: string) {
-    return this.requerimientosService.nextCodigo(+proyectoId);
+  @ApiOperation({ summary: 'Previsualizar el próximo código RF/RNF para un proyecto' })
+  nextCodigo(@Query('proyectoId') proyectoId: string, @Query('tipo') tipo?: string) {
+    return this.requerimientosService.nextCodigo(+proyectoId, tipo);
   }
 
   @Get(':id')

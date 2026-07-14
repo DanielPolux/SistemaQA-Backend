@@ -27,7 +27,7 @@ export class RequerimientosService {
       .addSelect(['u.nombre', 'u.apellido'])
       .skip(skip)
       .take(porPagina)
-      .orderBy('r.creadoEn', 'DESC');
+      .orderBy('r.creadoEn', 'ASC');
 
     if (query.proyectoId) qb.andWhere('r.proyectoId = :pid', { pid: query.proyectoId });
     if (query.tipo) qb.andWhere('r.tipo = :tipo', { tipo: query.tipo });
@@ -83,22 +83,26 @@ export class RequerimientosService {
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.creador', 'u')
       .where('r.proyectoId = :pid', { pid: proyectoId })
-      .orderBy('r.creadoEn', 'DESC')
+      .orderBy('r.creadoEn', 'ASC')
       .getMany();
   }
 
-  async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
+  async nextCodigo(proyectoId: number, tipo?: string): Promise<{ codigo: string }> {
+    const esNoFuncional = tipo === 'No Funcional';
+    const prefijo = esNoFuncional ? 'RNF' : 'RF';
+    const patron = esNoFuncional ? `^RNF-[0-9]+$` : `^RF-[0-9]+$`;
+    const startPos = esNoFuncional ? 5 : 4;
     const [{ max_num }] = await this.requerimientosRepo.manager.query(
-      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo FROM 4) AS INTEGER)), 0) AS max_num
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo FROM ${startPos}) AS INTEGER)), 0) AS max_num
        FROM requerimientos
-       WHERE proyecto_id = $1 AND codigo ~ '^RF-[0-9]+$'`,
-      [proyectoId],
+       WHERE proyecto_id = $1 AND codigo ~ $2`,
+      [proyectoId, patron],
     );
-    return { codigo: `RF-${String(Number(max_num) + 1).padStart(2, '0')}` };
+    return { codigo: `${prefijo}-${String(Number(max_num) + 1).padStart(2, '0')}` };
   }
 
   async create(dto: CreateRequerimientoDto, creadoPor: number): Promise<Requerimiento> {
-    const { codigo: codigoGenerado } = await this.nextCodigo(dto.proyectoId);
+    const { codigo: codigoGenerado } = await this.nextCodigo(dto.proyectoId, dto.tipo);
     const req = this.requerimientosRepo.create({ ...dto, creadoPor, codigo: codigoGenerado });
     return this.requerimientosRepo.save(req);
   }

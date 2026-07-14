@@ -173,6 +173,27 @@ export class CasosPruebaService {
     await this.casosRepo.remove(caso);
   }
 
+  async removeMany(ids: number[]): Promise<{ eliminados: number[]; bloqueados: { id: number; nombre: string; motivo: string }[] }> {
+    const eliminados: number[] = [];
+    const bloqueados: { id: number; nombre: string; motivo: string }[] = [];
+
+    for (const id of ids) {
+      const caso = await this.casosRepo.findOne({ where: { id } });
+      if (!caso) { bloqueados.push({ id, nombre: `#${id}`, motivo: 'No encontrado' }); continue; }
+
+      const totalDefectos = await this.defectosRepo.count({ where: { casoPruebaId: id } });
+      if (totalDefectos > 0) {
+        bloqueados.push({ id, nombre: caso.nombre, motivo: `Tiene ${totalDefectos} defecto(s) asociado(s)` });
+        continue;
+      }
+
+      await this.casosRepo.remove(caso);
+      eliminados.push(id);
+    }
+
+    return { eliminados, bloqueados };
+  }
+
   async importar(
     dto: ImportarCasosPruebaDto,
     creadoPor: number,
