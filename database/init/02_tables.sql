@@ -114,7 +114,7 @@ COMMENT ON COLUMN requerimientos.codigo IS 'Código único del requerimiento (ej
 CREATE TABLE IF NOT EXISTS casos_prueba (
   id                   SERIAL                  PRIMARY KEY,
   -- Identificación (SharePoint)
-  codigo_cp            VARCHAR(30)             UNIQUE,                            -- "Codigo CP"
+  codigo_cp            VARCHAR(30),                                               -- "Codigo CP"
   nombre               VARCHAR(300)            NOT NULL,                          -- "Nombre del Caso de Prueba"
   proyecto_id          INTEGER                 NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,  -- "Proyecto"
   clave_proyecto       VARCHAR(50),                                               -- "ClaveProyecto"
@@ -137,7 +137,8 @@ CREATE TABLE IF NOT EXISTS casos_prueba (
   -- Auditoría
   creado_por           INTEGER                 NOT NULL REFERENCES usuarios(id),
   creado_en            TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
-  actualizado_en       TIMESTAMPTZ             NOT NULL DEFAULT NOW()
+  actualizado_en       TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_caso_prueba_proyecto_codigo UNIQUE (proyecto_id, codigo_cp)
 );
 
 COMMENT ON TABLE  casos_prueba                    IS 'Casos de prueba — estructura basada en SharePoint "Casos de prueba Proyectos"';
