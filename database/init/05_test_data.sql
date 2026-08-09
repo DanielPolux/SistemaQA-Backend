@@ -104,7 +104,7 @@ SELECT p.id, 'REQ-002', 'Gestion de perfil de usuario',
   '1. El usuario visualiza todos sus datos. 2. Puede editar nombre y apellido. 3. Los cambios se reflejan de inmediato en el header.',
   'Funcional', 'Alta', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'PWC-2024' AND u.email = 'admin@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-003', 'Dashboard de metricas QA',
@@ -112,7 +112,7 @@ SELECT p.id, 'REQ-003', 'Dashboard de metricas QA',
   '1. Muestra total de casos por estado. 2. Porcentaje aprobados vs fallidos. 3. Grafica de tendencia semanal.',
   'Funcional', 'Media', 'En Análisis', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'PWC-2024' AND u.email = 'admin@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 -- ECM-2024: reqs
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
@@ -121,7 +121,7 @@ SELECT p.id, 'REQ-E01', 'Registro de nuevos usuarios',
   '1. Registro exitoso con datos validos. 2. Error con email duplicado. 3. Contrasena segura (min 8 car, 1 numero, 1 mayuscula). 4. Email de confirmacion enviado.',
   'Funcional', 'Crítica', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-E02', 'Autenticacion y gestion de sesion',
@@ -129,7 +129,7 @@ SELECT p.id, 'REQ-E02', 'Autenticacion y gestion de sesion',
   '1. Login con email/contrasena validos. 2. Error con credenciales incorrectas. 3. Bloqueo tras 5 intentos fallidos. 4. Sesion expira a las 8h de inactividad.',
   'Funcional', 'Crítica', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-E03', 'Catalogo de productos con filtros',
@@ -137,7 +137,7 @@ SELECT p.id, 'REQ-E03', 'Catalogo de productos con filtros',
   '1. Listado paginado (20 por pagina). 2. Filtros por categoria, precio y rating. 3. Ordenamiento por precio, novedad y popularidad. 4. Vista de detalle con imagenes y stock.',
   'Funcional', 'Alta', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-E04', 'Carrito de compras',
@@ -145,7 +145,7 @@ SELECT p.id, 'REQ-E04', 'Carrito de compras',
   '1. Agregar producto. 2. Modificar cantidad con validacion de stock. 3. Eliminar producto. 4. Carrito persiste entre sesiones. 5. Subtotal actualizado en tiempo real.',
   'Funcional', 'Crítica', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-E05', 'Pasarela de pago',
@@ -153,7 +153,7 @@ SELECT p.id, 'REQ-E05', 'Pasarela de pago',
   '1. Pago exitoso con tarjeta valida. 2. Rechazo claro con tarjeta invalida. 3. Comprobante por email. 4. SSL obligatorio. 5. Compatible con Visa, Mastercard y Amex.',
   'Funcional', 'Crítica', 'En Desarrollo', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-E06', 'Rendimiento bajo carga',
@@ -161,7 +161,7 @@ SELECT p.id, 'REQ-E06', 'Rendimiento bajo carga',
   '1. Catalogo carga en < 2s al P95. 2. Proceso de pago < 3s. 3. Busqueda de productos < 1s.',
   'No Funcional', 'Alta', 'Pendiente', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ECM-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 -- ABM-2025: reqs
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
@@ -170,7 +170,7 @@ SELECT p.id, 'REQ-A01', 'Autenticacion biometrica',
   '1. Registro inicial de biometria. 2. Login con huella valida. 3. Login con Face ID. 4. Fallback a PIN tras 3 fallos biometricos.',
   'Funcional', 'Crítica', 'Aprobado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ABM-2025' AND u.email = 'qa.lead2@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-A02', 'Consulta de saldos y movimientos',
@@ -178,7 +178,7 @@ SELECT p.id, 'REQ-A02', 'Consulta de saldos y movimientos',
   '1. Saldo actualizado en tiempo real. 2. Movimientos de los ultimos 90 dias. 3. Filtro por fecha y tipo. 4. Descarga de estado de cuenta en PDF.',
   'Funcional', 'Alta', 'En Análisis', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ABM-2025' AND u.email = 'qa.lead2@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-A03', 'Transferencias entre cuentas',
@@ -186,7 +186,7 @@ SELECT p.id, 'REQ-A03', 'Transferencias entre cuentas',
   '1. Transferencia exitosa entre cuentas propias. 2. Transferencia a terceros. 3. Error claro por fondos insuficientes. 4. Confirmacion por codigo SMS.',
   'Funcional', 'Crítica', 'Pendiente', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ABM-2025' AND u.email = 'qa.lead2@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 -- ERP-2024: reqs
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
@@ -195,7 +195,7 @@ SELECT p.id, 'REQ-M01', 'Migracion de datos maestros',
   '1. 100% de clientes migrados. 2. 100% de productos migrados. 3. Historico de transacciones (5 anos) preservado. 4. Integridad referencial mantenida.',
   'Técnico', 'Crítica', 'Completado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ERP-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 INSERT INTO requerimientos (proyecto_id, codigo, titulo, descripcion, criterios_aceptacion, tipo, prioridad, estado, creado_por)
 SELECT p.id, 'REQ-M02', 'Validacion de integridad post-migracion',
@@ -203,7 +203,7 @@ SELECT p.id, 'REQ-M02', 'Validacion de integridad post-migracion',
   '1. Conteos coinciden entre origen y destino. 2. Totales financieros cuadran al centavo. 3. Relaciones FK correctas. 4. Reporte de validacion generado.',
   'Técnico', 'Crítica', 'Completado', u.id
 FROM proyectos p, usuarios u WHERE p.codigo = 'ERP-2024' AND u.email = 'qa.lead@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 -- ================================================================
 -- 4. CASOS DE PRUEBA
@@ -221,7 +221,7 @@ SELECT 'CP-002', 'Login fallido con contrasena incorrecta',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-001'),
   '[{"orden":1,"descripcion":"Navegar al login","resultadoEsperado":"Formulario visible"},{"orden":2,"descripcion":"Ingresar email valido y contrasena incorrecta: Wrong123","resultadoEsperado":"Campos completados"},{"orden":3,"descripcion":"Clic en Iniciar Sesion","resultadoEsperado":"Error: Credenciales incorrectas"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'admin@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-003', 'Login con campo email vacio',
@@ -233,7 +233,7 @@ SELECT 'CP-003', 'Login con campo email vacio',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-001'),
   '[{"orden":1,"descripcion":"Navegar al login","resultadoEsperado":"Formulario visible"},{"orden":2,"descripcion":"Dejar email vacio, ingresar contrasena","resultadoEsperado":"Solo password completado"},{"orden":3,"descripcion":"Clic en Iniciar Sesion","resultadoEsperado":"Validacion: Email es requerido"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'admin@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-004', 'Edicion exitosa de perfil de usuario',
@@ -245,7 +245,7 @@ SELECT 'CP-004', 'Edicion exitosa de perfil de usuario',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-002'),
   '[{"orden":1,"descripcion":"Navegar a Mi Perfil","resultadoEsperado":"Formulario con datos actuales"},{"orden":2,"descripcion":"Cambiar apellido a Garcia","resultadoEsperado":"Campo editado"},{"orden":3,"descripcion":"Guardar cambios","resultadoEsperado":"Perfil actualizado. Header muestra nuevo apellido."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'admin@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E01 ----
 
@@ -259,7 +259,7 @@ SELECT 'CP-E01', 'Registro exitoso con datos validos',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E01'),
   '[{"orden":1,"descripcion":"Navegar a Registro","resultadoEsperado":"Formulario visible"},{"orden":2,"descripcion":"Ingresar nombre, email y contrasena Segura123!","resultadoEsperado":"Campos completados"},{"orden":3,"descripcion":"Confirmar contrasena y hacer clic en Registrar","resultadoEsperado":"Registro exitoso y email de confirmacion enviado"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E02', 'Registro con email ya registrado',
@@ -271,7 +271,7 @@ SELECT 'CP-E02', 'Registro con email ya registrado',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E01'),
   '[{"orden":1,"descripcion":"Ingresar email existente en el formulario de registro","resultadoEsperado":"Formulario completo"},{"orden":2,"descripcion":"Clic en Registrar","resultadoEsperado":"Error: Email ya registrado"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E03', 'Registro con contrasena debil',
@@ -283,7 +283,7 @@ SELECT 'CP-E03', 'Registro con contrasena debil',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E01'),
   '[{"orden":1,"descripcion":"Ingresar contrasena debil: 12345","resultadoEsperado":"Campo completado"},{"orden":2,"descripcion":"Clic en Registrar","resultadoEsperado":"Error: La contrasena no cumple los requisitos minimos"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E02 ----
 
@@ -297,7 +297,7 @@ SELECT 'CP-E04', 'Login exitoso en e-commerce',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E02'),
   '[{"orden":1,"descripcion":"Navegar al login e ingresar credenciales validas","resultadoEsperado":"Campos completados"},{"orden":2,"descripcion":"Clic en Iniciar Sesion","resultadoEsperado":"Redireccion al home con sesion activa"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E05', 'Bloqueo tras 5 intentos fallidos de login',
@@ -309,7 +309,7 @@ SELECT 'CP-E05', 'Bloqueo tras 5 intentos fallidos de login',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E02'),
   '[{"orden":1,"descripcion":"Realizar 5 intentos de login con contrasena incorrecta","resultadoEsperado":"Errores consecutivos"},{"orden":2,"descripcion":"Verificar mensaje en el 5to intento","resultadoEsperado":"Cuenta bloqueada. Revise su email."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E03 ----
 
@@ -323,7 +323,7 @@ SELECT 'CP-E06', 'Catalogo paginado: 20 productos por pagina',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E03'),
   '[{"orden":1,"descripcion":"Navegar al catalogo","resultadoEsperado":"Listado visible"},{"orden":2,"descripcion":"Contar productos en pagina 1","resultadoEsperado":"Exactamente 20 productos"},{"orden":3,"descripcion":"Navegar a pagina 2","resultadoEsperado":"Siguientes 20 productos sin repeticion"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E07', 'Filtro por categoria en catalogo',
@@ -335,7 +335,7 @@ SELECT 'CP-E07', 'Filtro por categoria en catalogo',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E03'),
   '[{"orden":1,"descripcion":"Seleccionar categoria Electronica","resultadoEsperado":"Filtro aplicado"},{"orden":2,"descripcion":"Revisar productos listados","resultadoEsperado":"Todos son de Electronica"},{"orden":3,"descripcion":"Cambiar a categoria Ropa","resultadoEsperado":"Lista actualizada solo con Ropa"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E04 ----
 
@@ -349,7 +349,7 @@ SELECT 'CP-E08', 'Agregar producto al carrito',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E04'),
   '[{"orden":1,"descripcion":"Seleccionar un producto y clic en Agregar al carrito","resultadoEsperado":"Contador de carrito incrementa"},{"orden":2,"descripcion":"Navegar al carrito","resultadoEsperado":"Producto listado con precio correcto"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E09', 'Modificar cantidad en el carrito actualiza subtotal',
@@ -361,7 +361,7 @@ SELECT 'CP-E09', 'Modificar cantidad en el carrito actualiza subtotal',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E04'),
   '[{"orden":1,"descripcion":"Con producto en carrito, cambiar cantidad a 3","resultadoEsperado":"Cantidad = 3"},{"orden":2,"descripcion":"Verificar subtotal","resultadoEsperado":"Subtotal = precio x 3 sin recargar pagina"},{"orden":3,"descripcion":"Cambiar cantidad a 0","resultadoEsperado":"Producto eliminado automaticamente"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E05 ----
 
@@ -375,7 +375,7 @@ SELECT 'CP-E10', 'Pago exitoso con tarjeta Visa de prueba',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E05'),
   '[{"orden":1,"descripcion":"Proceder al checkout con productos en carrito","resultadoEsperado":"Formulario de pago visible"},{"orden":2,"descripcion":"Ingresar tarjeta Visa de prueba: 4111 1111 1111 1111","resultadoEsperado":"Datos de tarjeta ingresados"},{"orden":3,"descripcion":"Confirmar el pago","resultadoEsperado":"Pago aprobado, pagina de confirmacion con numero de orden"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-E11', 'Rechazo de pago con tarjeta invalida',
@@ -387,7 +387,7 @@ SELECT 'CP-E11', 'Rechazo de pago con tarjeta invalida',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E05'),
   '[{"orden":1,"descripcion":"Ingresar tarjeta rechazada: 4000 0000 0000 0002","resultadoEsperado":"Datos ingresados"},{"orden":2,"descripcion":"Confirmar el pago","resultadoEsperado":"Error: Tarjeta rechazada. No se realizo ningun cargo."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ECM-2024 / REQ-E06 (rendimiento) ----
 
@@ -401,7 +401,7 @@ SELECT 'CP-E12', 'Tiempo de carga del catalogo menor a 2 segundos',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-E06'),
   '[{"orden":1,"descripcion":"Configurar plan JMeter: 100 hilos, rampa 30s","resultadoEsperado":"Plan configurado"},{"orden":2,"descripcion":"Ejecutar carga contra GET /api/products","resultadoEsperado":"Test en ejecucion"},{"orden":3,"descripcion":"Revisar P95 en el reporte","resultadoEsperado":"P95 < 2000ms"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ABM-2025 / REQ-A01 ----
 
@@ -415,7 +415,7 @@ SELECT 'CP-A01', 'Autenticacion exitosa con huella digital',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-A01'),
   '[{"orden":1,"descripcion":"Abrir la app bancaria","resultadoEsperado":"Pantalla de autenticacion con opcion biometrica"},{"orden":2,"descripcion":"Apoyar dedo registrado en el sensor","resultadoEsperado":"Huella reconocida en < 1s"},{"orden":3,"descripcion":"Verificar acceso","resultadoEsperado":"Dashboard bancario visible"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead2@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-A02', 'Fallback a PIN tras 3 fallos biometricos',
@@ -427,7 +427,7 @@ SELECT 'CP-A02', 'Fallback a PIN tras 3 fallos biometricos',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-A01'),
   '[{"orden":1,"descripcion":"Usar dedo no registrado 3 veces consecutivas","resultadoEsperado":"3 fallos biometricos"},{"orden":2,"descripcion":"Verificar aparicion del teclado PIN","resultadoEsperado":"Teclado PIN visible"},{"orden":3,"descripcion":"Ingresar PIN correcto","resultadoEsperado":"Acceso concedido al dashboard"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead2@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ABM-2025 / REQ-A03 ----
 
@@ -441,7 +441,7 @@ SELECT 'CP-A03', 'Transferencia exitosa entre cuentas propias',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-A03'),
   '[{"orden":1,"descripcion":"Navegar a Transferencias > Cuentas propias","resultadoEsperado":"Formulario de transferencia visible"},{"orden":2,"descripcion":"Seleccionar cuentas origen y destino, ingresar S/. 100","resultadoEsperado":"Formulario completo"},{"orden":3,"descripcion":"Confirmar con codigo SMS","resultadoEsperado":"SMS recibido, transferencia procesada"},{"orden":4,"descripcion":"Verificar saldos","resultadoEsperado":"Origen -100, destino +100"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead2@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-A04', 'Rechazo de transferencia por fondos insuficientes',
@@ -453,7 +453,7 @@ SELECT 'CP-A04', 'Rechazo de transferencia por fondos insuficientes',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-A03'),
   '[{"orden":1,"descripcion":"Intentar transferir S/. 99999 desde cuenta con S/. 100","resultadoEsperado":"Formulario con monto excesivo"},{"orden":2,"descripcion":"Confirmar la transferencia","resultadoEsperado":"Error: Fondos insuficientes. Saldo disponible: S/. 100."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead2@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 -- ---- ERP-2024 / REQ-M01 y REQ-M02 ----
 
@@ -467,7 +467,7 @@ SELECT 'CP-M01', 'Validacion de conteo de clientes migrados',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-M01'),
   '[{"orden":1,"descripcion":"Ejecutar COUNT(*) en sistema legacy: SELECT COUNT(*) FROM clientes","resultadoEsperado":"Total: 45,230"},{"orden":2,"descripcion":"Ejecutar COUNT(*) en nuevo ERP: SELECT COUNT(*) FROM customers","resultadoEsperado":"Total: 45,230"},{"orden":3,"descripcion":"Comparar ambos conteos","resultadoEsperado":"Diferencia = 0. Migracion 100% completa."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-M02', 'Validacion de totales financieros post-migracion',
@@ -479,7 +479,7 @@ SELECT 'CP-M02', 'Validacion de totales financieros post-migracion',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-M02'),
   '[{"orden":1,"descripcion":"Sumar saldos de CxC en sistema legacy","resultadoEsperado":"Total: S/. 8,452,310.75"},{"orden":2,"descripcion":"Sumar saldos de CxC en nuevo ERP","resultadoEsperado":"Total: S/. 8,452,310.75"},{"orden":3,"descripcion":"Calcular diferencia","resultadoEsperado":"Diferencia = S/. 0.00. Integridad confirmada."}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 INSERT INTO casos_prueba (codigo_cp, nombre, proyecto_id, clave_proyecto, tipo, descripcion, prioridad, estado, resultado, resultado_esperado, responsable_qa_id, requerimiento_rf, requerimiento_id, pasos, creado_por)
 SELECT 'CP-M03', 'Regresion: modulo de facturacion post-migracion',
@@ -491,7 +491,7 @@ SELECT 'CP-M03', 'Regresion: modulo de facturacion post-migracion',
   (SELECT id FROM requerimientos WHERE codigo = 'REQ-M02'),
   '[{"orden":1,"descripcion":"Crear factura de prueba en el nuevo ERP","resultadoEsperado":"Numero correlativo correcto"},{"orden":2,"descripcion":"Verificar historial del cliente con facturas migradas","resultadoEsperado":"Historial completo visible"},{"orden":3,"descripcion":"Revisar calculo de IGV","resultadoEsperado":"IGV 18% calculado correctamente"}]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'qa.lead@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
 
 COMMIT;
 

@@ -106,7 +106,7 @@ SELECT
 FROM proyectos p, usuarios u
 WHERE p.codigo = 'PWC-2024'
   AND u.email  = 'admin@qa.com'
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo) DO NOTHING;
 
 -- ---------------------------------------------------------------
 -- Caso de prueba de demostración
@@ -138,4 +138,4 @@ SELECT
     {"orden":4,"descripcion":"Hacer clic en Iniciar Sesión","resultadoEsperado":"Redirección al dashboard principal"}
   ]'::jsonb,
   (SELECT id FROM usuarios WHERE email = 'admin@qa.com')
-ON CONFLICT (codigo_cp) DO NOTHING;
+ON CONFLICT (proyecto_id, codigo_cp) DO NOTHING;
