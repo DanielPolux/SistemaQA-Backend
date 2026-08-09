@@ -62,7 +62,9 @@ Swagger disponible en `http://localhost:3000/api/docs`.
 listos para producción. Vive en este repo pero, igual que el `compose.yml` de desarrollo,
 **se ejecuta desde el directorio padre** que contiene ambos repos como hermanos — las rutas
 `context: ./SistemaQA-Backend` y `context: ./SistemaQA` dentro del archivo son relativas a
-ese directorio padre, no a este repo:
+ese directorio padre, no a este repo. Por eso el comando de abajo usa
+`--project-directory .`: sin ese flag, Compose resuelve las rutas relativas al directorio
+donde vive el archivo `-f` (este repo), no al directorio desde el que lo invocás, y falla.
 
 ```
 apps/                          <- ejecutar docker compose desde aquí
@@ -82,7 +84,7 @@ cp SistemaQA-Backend/.env.prod.example .env                    # vars de Postgre
 cp SistemaQA-Backend/.env.example SistemaQA-Backend/.env        # vars del backend (JWT, CORS, mail, DB_SSL=false, etc.)
 # edita ambos .env con valores reales antes de continuar
 
-docker compose -f SistemaQA-Backend/docker-compose.prod.yml up -d --build
+docker compose -f SistemaQA-Backend/docker-compose.prod.yml --project-directory . up -d --build
 ```
 
 El frontend queda expuesto en el puerto `80` (nginx) y hace de proxy de `/api/*` hacia el backend
