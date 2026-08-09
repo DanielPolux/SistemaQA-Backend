@@ -56,6 +56,42 @@ Swagger disponible en `http://localhost:3000/api/docs`.
 
 ---
 
+## Despliegue en Producción (self-hosted, Docker Compose)
+
+`docker-compose.prod.yml` orquesta los 3 servicios (Postgres + backend + frontend con nginx)
+listos para producción. Vive en este repo pero, igual que el `compose.yml` de desarrollo,
+**se ejecuta desde el directorio padre** que contiene ambos repos como hermanos — las rutas
+`context: ./SistemaQA-Backend` y `context: ./SistemaQA` dentro del archivo son relativas a
+ese directorio padre, no a este repo:
+
+```
+apps/                          <- ejecutar docker compose desde aquí
+├── SistemaQA-Backend/         (este repo)
+│   ├── docker-compose.prod.yml
+│   ├── .env.prod.example
+│   └── .env.example
+└── SistemaQA/                 (frontend)
+```
+
+```bash
+cd apps
+git clone https://github.com/DanielPolux/SistemaQA-Backend.git
+git clone https://github.com/DanielPolux/SistemaQA.git
+
+cp SistemaQA-Backend/.env.prod.example .env                    # vars de Postgres (DB_USERNAME/DB_PASSWORD/DB_DATABASE)
+cp SistemaQA-Backend/.env.example SistemaQA-Backend/.env        # vars del backend (JWT, CORS, mail, DB_SSL=false, etc.)
+# edita ambos .env con valores reales antes de continuar
+
+docker compose -f SistemaQA-Backend/docker-compose.prod.yml up -d --build
+```
+
+El frontend queda expuesto en el puerto `80` (nginx) y hace de proxy de `/api/*` hacia el backend
+(mismo origen, sin CORS) — por eso `CORS_ORIGIN`/`FRONTEND_URL` en `SistemaQA-Backend/.env` deben
+apuntar al host donde sirves el frontend. `DB_SSL=false` porque el Postgres del compose es propio,
+no gestionado.
+
+---
+
 ## Estructura
 
 ```
