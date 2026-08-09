@@ -48,7 +48,10 @@ import { ReportesModule } from './reportes/reportes.module';
         username: config.get('DB_USERNAME', 'postgres'),
         password: config.get('DB_PASSWORD', 'postgres'),
         database: config.get('DB_DATABASE', 'sistema_qa'),
-        ssl: config.get('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
+        // DB_SSL es independiente de NODE_ENV: en producción "on-prem" (ej. Postgres
+        // en Docker propio) no hay SSL; en un Postgres gestionado (Supabase, RDS, etc.)
+        // sí se necesita. Se activa explícitamente con DB_SSL=true.
+        ssl: config.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         entities: [
           Usuario,
           UsuarioRol,
