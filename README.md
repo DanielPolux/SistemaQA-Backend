@@ -92,6 +92,18 @@ El frontend queda expuesto en el puerto `80` (nginx) y hace de proxy de `/api/*`
 apuntar al host donde sirves el frontend. `DB_SSL=false` porque el Postgres del compose es propio,
 no gestionado.
 
+### Flujo de actualización (cambios incrementales)
+
+Los despliegues a producción se hacen **cambio a cambio**, no en lote:
+
+1. `git pull` en el servidor, en el repo que cambió (backend y/o frontend)
+2. Rebuild solo del servicio afectado: `docker compose -f SistemaQA-Backend/docker-compose.prod.yml --project-directory . build <servicio>`
+3. `up -d` para recrear solo ese contenedor
+4. Verificar que el sitio responda antes de dar el cambio por terminado
+
+No hay script de deploy automatizado a propósito — permite revisar cada cambio antes de
+aplicarlo.
+
 ---
 
 ## Estructura
