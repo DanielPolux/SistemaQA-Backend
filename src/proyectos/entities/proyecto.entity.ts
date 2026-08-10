@@ -140,4 +140,20 @@ export class Proyecto {
 
   @UpdateDateColumn({ name: 'actualizado_en' })
   actualizadoEn: Date;
+
+  /**
+   * Fase 3 — archivar proyecto: cuándo se purgaron del disco los archivos de
+   * evidencia (imágenes/video/pdf/log) de las ejecuciones de este proyecto.
+   * Los registros en BD (ejecuciones, defectos, y las columnas `evidencias`
+   * con nombre/url) NO se borran — solo los archivos físicos.
+   */
+  @Column({ name: 'evidencias_archivadas_en', type: 'timestamptz', nullable: true })
+  evidenciasArchivadasEn: Date | null;
+
+  @Column({ name: 'evidencias_archivadas_por', nullable: true })
+  evidenciasArchivadasPor: number | null;
+
+  @ManyToOne(() => Usuario, { eager: false, nullable: true })
+  @JoinColumn({ name: 'evidencias_archivadas_por' })
+  archivadoPorUsuario: Usuario;
 }

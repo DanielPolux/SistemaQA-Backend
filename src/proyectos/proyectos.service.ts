@@ -114,7 +114,7 @@ export class ProyectosService {
   async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const p = await this.proyectosRepo.findOne({
       where: { id },
-      relations: ['jefeProyecto', 'jefeQa', 'responsableQa', 'creador'],
+      relations: ['jefeProyecto', 'jefeQa', 'responsableQa', 'creador', 'archivadoPorUsuario'],
     });
     if (!p) throw new NotFoundException(`Proyecto #${id} no encontrado`);
 
@@ -253,10 +253,13 @@ export class ProyectosService {
       jefeProyectoNombre:  p.jefeProyecto  ? `${p.jefeProyecto.nombre} ${p.jefeProyecto.apellido}`  : null,
       jefeQaNombre:        p.jefeQa        ? `${p.jefeQa.nombre} ${p.jefeQa.apellido}`              : null,
       responsableQaNombre: p.responsableQa ? `${p.responsableQa.nombre} ${p.responsableQa.apellido}` : null,
-      jefeProyecto:  undefined,
-      jefeQa:        undefined,
-      responsableQa: undefined,
-      creador:       undefined,
+      evidenciasArchivadasPorNombre: p.archivadoPorUsuario
+        ? `${p.archivadoPorUsuario.nombre} ${p.archivadoPorUsuario.apellido}` : null,
+      jefeProyecto:       undefined,
+      jefeQa:             undefined,
+      responsableQa:      undefined,
+      creador:            undefined,
+      archivadoPorUsuario: undefined,
     };
   }
 

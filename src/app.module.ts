@@ -32,6 +32,7 @@ import { Catalogo } from './catalogos/entities/catalogo.entity';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { ArchivoModule } from './archivo/archivo.module';
 
 @Module({
   controllers: [HealthController],
@@ -87,6 +88,7 @@ import { UploadsModule } from './uploads/uploads.module';
     DefectosModule,
     EjecucionesModule,
     UploadsModule,
+    ArchivoModule,
   ],
 })
 export class AppModule {}
