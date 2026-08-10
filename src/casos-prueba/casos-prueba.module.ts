@@ -8,11 +8,15 @@ import { ComentarioDefecto } from '../defectos/entities/comentario-defecto.entit
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { Proyecto } from '../proyectos/entities/proyecto.entity';
 import { DefectosService } from '../defectos/defectos.service';
+import { DefectoWordService } from '../defectos/defecto-word.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([CasoPrueba, Defecto, ComentarioDefecto, Usuario, Proyecto])],
   controllers: [CasosPruebaController],
-  providers: [CasosPruebaService, DefectosService],
+  // NOTA: DefectosService está duplicado aquí en vez de importar DefectosModule
+  // (deuda técnica preexistente) -- por eso necesita también sus propias
+  // dependencias (DefectoWordService) registradas como provider local.
+  providers: [CasosPruebaService, DefectosService, DefectoWordService],
   exports: [CasosPruebaService],
 })
 export class CasosPruebaModule {}
