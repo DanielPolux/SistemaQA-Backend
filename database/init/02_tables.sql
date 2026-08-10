@@ -173,7 +173,8 @@ CREATE TABLE IF NOT EXISTS defectos (
   estado_desarrollo       estado_desarrollo,
   comentarios_desarrollo  TEXT,
   creado_en               TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
-  actualizado_en          TIMESTAMPTZ         NOT NULL DEFAULT NOW()
+  actualizado_en          TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_defecto_proyecto_codigo_proyecto UNIQUE (proyecto_id, codigo_proyecto)
 );
 
 COMMENT ON TABLE  defectos                   IS 'Defectos/bugs encontrados durante las pruebas';

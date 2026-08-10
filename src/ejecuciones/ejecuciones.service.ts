@@ -113,6 +113,11 @@ export class EjecucionesService {
     }
 
     const resultado = await this.dataSource.transaction(async (em) => {
+      // Bloquea la fila del proyecto para serializar la generacion de codigoProyecto
+      // (INC-XXX) entre transacciones concurrentes del mismo proyecto — ver el mismo
+      // lock en DefectosService.create().
+      await em.query('SELECT id FROM proyectos WHERE id = $1 FOR UPDATE', [ejecucionFields.proyectoId]);
+
       // Resolver ciclo activo dentro de la transacción
       let cicloId = ejecucionFields.cicloId ?? undefined;
       if (!cicloId && ejecucionFields.proyectoId) {

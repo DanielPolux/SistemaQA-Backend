@@ -129,6 +129,13 @@ export class DefectosService {
     delete fields.codigo;
 
     const saved = await this.defectosRepo.manager.transaction(async (em) => {
+      // Bloquea la fila del proyecto para serializar la generacion de codigoProyecto
+      // (INC-XXX) entre transacciones concurrentes del mismo proyecto. Sin esto, dos
+      // defectos creados casi al mismo tiempo pueden leer el mismo COUNT() y terminar
+      // con el mismo codigo -- el constraint unico de la tabla es la ultima linea de
+      // defensa, pero este lock evita que llegue a fallar en primer lugar.
+      await em.query('SELECT id FROM proyectos WHERE id = $1 FOR UPDATE', [dto.proyectoId]);
+
       const defecto = em.create(Defecto, { ...fields, reportadoPor });
       const inserted = await em.save(defecto);
 
