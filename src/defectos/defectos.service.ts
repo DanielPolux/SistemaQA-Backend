@@ -99,6 +99,16 @@ export class DefectosService {
       creadoEn: c.creadoEn,
     }));
 
+    // Evidencias de la(s) ejecución(es) que originaron este defecto (ver Fase 2 —
+    // Word con imágenes embebidas). Normalmente hay una sola ejecución auto-vinculada,
+    // pero se agregan todas por si acaso para no perder evidencia.
+    const ejecucionesVinculadas: { evidencias: { url: string; nombre: string }[] | null }[] =
+      await this.defectosRepo.manager.query(
+        `SELECT evidencias FROM ejecuciones_caso_prueba WHERE defecto_id = $1`,
+        [id],
+      );
+    const evidencias = ejecucionesVinculadas.flatMap((e) => e.evidencias ?? []);
+
     return {
       ...d,
       proyectoNombre: d.proyecto?.nombre ?? null,
@@ -106,6 +116,7 @@ export class DefectosService {
       asignadoANombre: d.asignado ? `${d.asignado.nombre} ${d.asignado.apellido}` : null,
       reportadoPorNombre: d.reportador ? `${d.reportador.nombre} ${d.reportador.apellido}` : null,
       comentarios,
+      evidencias,
       proyecto: undefined,
       casoPrueba: undefined,
       asignado: undefined,
