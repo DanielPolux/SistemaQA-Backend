@@ -12,9 +12,10 @@ import { QueryDefectoDto } from './dto/query-defecto.dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { CreateComentarioDto } from './dto/create-comentario.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
-import { MailService } from '../mail/mail.service';
+import { MailService, MailAttachment } from '../mail/mail.service';
 import { userProjectFilter } from '../common/helpers/user-access.helper';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { DefectoWordService, EvidenciaArchivo } from './defecto-word.service';
 
 const CAMPOS_AUDIT_DEFECTO = ['titulo', 'descripcion', 'severidad', 'prioridad', 'asignadoA', 'estado'];
 
@@ -34,6 +35,7 @@ export class DefectosService {
     private mailService: MailService,
     private auditoriaService: AuditoriaService,
     private config: ConfigService,
+    private defectoWordService: DefectoWordService,
   ) {}
 
   async findAll(query: QueryDefectoDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
@@ -99,15 +101,7 @@ export class DefectosService {
       creadoEn: c.creadoEn,
     }));
 
-    // Evidencias de la(s) ejecución(es) que originaron este defecto (ver Fase 2 —
-    // Word con imágenes embebidas). Normalmente hay una sola ejecución auto-vinculada,
-    // pero se agregan todas por si acaso para no perder evidencia.
-    const ejecucionesVinculadas: { evidencias: { url: string; nombre: string }[] | null }[] =
-      await this.defectosRepo.manager.query(
-        `SELECT evidencias FROM ejecuciones_caso_prueba WHERE defecto_id = $1`,
-        [id],
-      );
-    const evidencias = ejecucionesVinculadas.flatMap((e) => e.evidencias ?? []);
+    const { evidencias } = await this.obtenerContextoEjecucion(id);
 
     return {
       ...d,
@@ -349,21 +343,96 @@ export class DefectosService {
     return { codigoProyecto: siguiente };
   }
 
+  // ── Evidencias/observaciones de la ejecución de origen ─────────────────────
+
+  /**
+   * Evidencias y observación del tester de la(s) ejecución(es) vinculadas a este
+   * defecto (ejecuciones_caso_prueba.defecto_id). Se usa tanto para exponerlas en
+   * findOne() como para adjuntar el Word de evidencias al correo de notificación.
+   */
+  private async obtenerContextoEjecucion(
+    defectoId: number,
+  ): Promise<{ evidencias: EvidenciaArchivo[]; observaciones: string | null }> {
+    const filas: { evidencias: EvidenciaArchivo[] | null; observaciones: string | null }[] =
+      await this.defectosRepo.manager.query(
+        `SELECT evidencias, observaciones FROM ejecuciones_caso_prueba WHERE defecto_id = $1 ORDER BY fecha DESC`,
+        [defectoId],
+      );
+    return {
+      evidencias: filas.flatMap((f) => f.evidencias ?? []),
+      observaciones: filas.find((f) => f.observaciones)?.observaciones ?? null,
+    };
+  }
+
   // ── Envíos de correo ────────────────────────────────────────────────────────
 
-  async enviarCorreoNuevoDefecto(defecto: Defecto, esAsignacionPM = false): Promise<void> {
-    if (!defecto.asignadoA) return;
+  async enviarCorreoNuevoDefecto(
+    defecto: Defecto,
+    esAsignacionPM = false,
+    evidencias?: EvidenciaArchivo[],
+    observacionesTester?: string | null,
+  ): Promise<void> {
+    // Si no vienen explícitas (p.ej. reasignación desde el formulario de edición,
+    // o creación directa por API sin pasar por una ejecución), se consultan.
+    if (evidencias === undefined) {
+      const contexto = await this.obtenerContextoEjecucion(defecto.id);
+      evidencias = contexto.evidencias;
+      observacionesTester = contexto.observaciones;
+    }
 
-    const [asignado, reportador, proyecto] = await Promise.all([
-      this.usuariosRepo.findOne({ where: { id: defecto.asignadoA } }),
+    const [reportador, proyecto, casoPrueba] = await Promise.all([
       this.usuariosRepo.findOne({ where: { id: defecto.reportadoPor } }),
       this.proyectosRepo.findOne({ where: { id: defecto.proyectoId }, relations: ['jefeProyecto'] }),
+      this.defectosRepo.manager.query('SELECT codigo FROM casos_prueba WHERE id = $1', [defecto.casoPruebaId]),
     ]);
 
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
+    const linkDefecto  = `${frontendUrl}/defectos/${defecto.id}`;
+
+    const wordBuffer = await this.defectoWordService.generar(
+      { ...defecto, proyectoNombre: proyecto?.nombre ?? null, casoPruebaCodigo: casoPrueba?.[0]?.codigo ?? null } as any,
+      evidencias,
+      observacionesTester,
+    );
+    const attachments: MailAttachment[] | undefined = wordBuffer
+      ? [{ filename: `${defecto.codigoProyecto ?? defecto.codigo}-reporte.docx`, content: wordBuffer }]
+      : undefined;
+
+    if (!defecto.asignadoA) {
+      // Sin desarrollador asignado todavía: se notifica al PM del proyecto para que
+      // lo asigne (antes esto simplemente no enviaba ningún correo).
+      if (!proyecto?.jefeProyecto?.email) return;
+      try {
+        await this.mailService.send({
+          to: proyecto.jefeProyecto.email,
+          subject: `[Defecto Pendiente de Asignación] ${defecto.codigoProyecto} — ${defecto.titulo}`,
+          html: this.plantillaDefectoParaPM(defecto, proyecto.jefeProyecto, reportador, proyecto, linkDefecto, !!attachments),
+          attachments,
+        });
+        await this.auditoriaService.registrar({
+          entidad:       'Defecto',
+          entidadId:     defecto.id,
+          usuarioNombre: 'Sistema',
+          accion:        'Correo Enviado',
+          campo:         'notificacion',
+          valorNuevo:    `Sin asignar → PM: ${proyecto.jefeProyecto.email}`,
+        });
+      } catch (err) {
+        await this.auditoriaService.registrar({
+          entidad:       'Defecto',
+          entidadId:     defecto.id,
+          usuarioNombre: 'Sistema',
+          accion:        'Error Correo',
+          campo:         'notificacion',
+          valorNuevo:    err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
+
+    const asignado = await this.usuariosRepo.findOne({ where: { id: defecto.asignadoA } });
     if (!asignado?.email) return;
 
-    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
-    const linkDefecto = `${frontendUrl}/defectos/${defecto.id}`;
     const esPM = asignado.rol === Rol.PROJECT_MANAGER || asignado.rol === Rol.ADMIN;
 
     let subject: string;
@@ -373,7 +442,7 @@ export class DefectosService {
 
     if (esPM) {
       subject    = `[Defecto Pendiente de Asignación] ${defecto.codigoProyecto} — ${defecto.titulo}`;
-      html       = this.plantillaDefectoParaPM(defecto, asignado, reportador, proyecto, linkDefecto);
+      html       = this.plantillaDefectoParaPM(defecto, asignado, reportador, proyecto, linkDefecto, !!attachments);
       auditLabel = 'PM sin asignar';
     } else if (esAsignacionPM) {
       const ccList: string[] = [];
@@ -382,7 +451,7 @@ export class DefectosService {
       }
       cc         = ccList.length ? ccList : undefined;
       subject    = `[Defecto Asignado] ${defecto.codigoProyecto} — ${defecto.titulo}`;
-      html       = this.plantillaDefectoAsignado(defecto, asignado, reportador, proyecto, linkDefecto);
+      html       = this.plantillaDefectoAsignado(defecto, asignado, reportador, proyecto, linkDefecto, !!attachments);
       auditLabel = 'Asignado por PM';
     } else {
       const ccList: string[] = [];
@@ -391,12 +460,12 @@ export class DefectosService {
       }
       cc         = ccList.length ? ccList : undefined;
       subject    = `[Nuevo Defecto] ${defecto.codigoProyecto} — ${defecto.titulo}`;
-      html       = this.plantillaDefectoNuevo(defecto, asignado, reportador, proyecto, linkDefecto);
+      html       = this.plantillaDefectoNuevo(defecto, asignado, reportador, proyecto, linkDefecto, !!attachments);
       auditLabel = 'Nuevo defecto';
     }
 
     try {
-      await this.mailService.send({ to: asignado.email, cc, subject, html });
+      await this.mailService.send({ to: asignado.email, cc, subject, html, attachments });
       await this.auditoriaService.registrar({
         entidad:       'Defecto',
         entidadId:     defecto.id,
@@ -508,12 +577,21 @@ export class DefectosService {
 
   // ── Plantillas HTML ─────────────────────────────────────────────────────────
 
+  /** Aviso de adjunto — se agrega en las plantillas de "nuevo defecto" cuando se pudo generar el Word. */
+  private avisoAdjuntoWord(tieneAdjunto: boolean): string {
+    if (!tieneAdjunto) return '';
+    return `<div style="background:#eef2f7;border-left:4px solid #1E3A5F;padding:12px 14px;border-radius:0 6px 6px 0;margin:16px 0;font-size:14px">
+      &#x1F4CE; Se adjunta el <strong>reporte completo en Word</strong> con la evidencia (capturas/pasos) recogida por el tester.
+    </div>`;
+  }
+
   private plantillaDefectoNuevo(
     d: Defecto,
     developer: Usuario,
     reportador: Usuario | null,
     proyecto: Proyecto | null,
     linkDefecto: string,
+    tieneAdjunto = false,
   ): string {
     return `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -538,6 +616,7 @@ export class DefectosService {
           <pre style="background:#fff;padding:12px;border:1px solid #dee2e6;white-space:pre-wrap">${d.pasosReproduccion}</pre>
           <p><strong>Resultado esperado:</strong></p>
           <p style="background:#fff;padding:12px;border-left:4px solid #28a745;margin:0">${d.resultadoEsperado}</p>
+          ${this.avisoAdjuntoWord(tieneAdjunto)}
           <div style="margin:24px 0;text-align:center">
             <a href="${linkDefecto}" style="background:#dc3545;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Ver Defecto en el Sistema</a>
           </div>
@@ -553,6 +632,7 @@ export class DefectosService {
     reportador: Usuario | null,
     proyecto: Proyecto | null,
     linkDefecto: string,
+    tieneAdjunto = false,
   ): string {
     return `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -577,6 +657,7 @@ export class DefectosService {
           <pre style="background:#fff;padding:12px;border:1px solid #dee2e6;white-space:pre-wrap">${d.pasosReproduccion}</pre>
           <p><strong>Resultado esperado:</strong></p>
           <p style="background:#fff;padding:12px;border-left:4px solid #28a745;margin:0">${d.resultadoEsperado}</p>
+          ${this.avisoAdjuntoWord(tieneAdjunto)}
           <div style="margin:24px 0;text-align:center">
             <a href="${linkDefecto}" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Ver Defecto en el Sistema</a>
           </div>
@@ -592,6 +673,7 @@ export class DefectosService {
     reportador: Usuario | null,
     proyecto: Proyecto | null,
     linkDefecto: string,
+    tieneAdjunto = false,
   ): string {
     return `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -604,6 +686,7 @@ export class DefectosService {
           <div style="background:#fff3cd;border-left:4px solid #fd7e14;padding:14px;border-radius:0 6px 6px 0;margin:16px 0">
             <strong>Acción requerida:</strong> Ingresa al sistema y asigna este defecto al desarrollador responsable para que pueda ser atendido.
           </div>
+          ${this.avisoAdjuntoWord(tieneAdjunto)}
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
             <tr style="background:#fff"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;width:35%">Código</td><td style="padding:8px;border:1px solid #dee2e6">${d.codigoProyecto ?? d.codigo}</td></tr>
             <tr style="background:#f8f9fa"><td style="padding:8px;border:1px solid #dee2e6;font-weight:bold">Título</td><td style="padding:8px;border:1px solid #dee2e6">${d.titulo}</td></tr>

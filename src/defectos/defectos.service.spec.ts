@@ -9,6 +9,7 @@ import { Proyecto } from '../proyectos/entities/proyecto.entity';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { DefectoWordService } from './defecto-word.service';
 
 const mockDefecto = {
   id: 1,
@@ -43,7 +44,7 @@ const mockDefectosRepo = {
   query: jest.fn(),
   manager: {
     transaction: jest.fn(),
-    query: jest.fn(),
+    query: jest.fn().mockResolvedValue([]),
   },
 };
 
@@ -61,6 +62,7 @@ describe('DefectosService', () => {
         { provide: ConfigService,    useValue: { get: jest.fn().mockReturnValue('http://localhost:4200') } },
         { provide: MailService,      useValue: { send: jest.fn() } },
         { provide: AuditoriaService, useValue: { registrar: jest.fn(), registrarCambios: jest.fn() } },
+        { provide: DefectoWordService, useValue: { generar: jest.fn().mockResolvedValue(null) } },
       ],
     }).compile();
 

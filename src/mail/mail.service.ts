@@ -2,11 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 export interface MailOptions {
   to: string | string[];
   cc?: string | string[];
   subject: string;
   html: string;
+  attachments?: MailAttachment[];
 }
 
 @Injectable()
@@ -34,7 +40,8 @@ export class MailService {
     const from = this.config.get<string>('MAIL_FROM', 'Sistema QA <no-reply@sistemaqa.com>');
 
     if (!this.transporter) {
-      this.logger.log(`[MAIL-SIMULADO] Para: ${options.to} | CC: ${options.cc ?? '-'} | Asunto: ${options.subject}`);
+      const adjuntos = options.attachments?.length ? options.attachments.map((a) => a.filename).join(', ') : '-';
+      this.logger.log(`[MAIL-SIMULADO] Para: ${options.to} | CC: ${options.cc ?? '-'} | Asunto: ${options.subject} | Adjuntos: ${adjuntos}`);
       return;
     }
 

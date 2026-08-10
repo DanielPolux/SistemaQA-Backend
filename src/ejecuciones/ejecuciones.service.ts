@@ -165,7 +165,12 @@ export class EjecucionesService {
       accion:        'Creado',
     });
 
-    this.defectosService.enviarCorreoNuevoDefecto(resultado.defectoFinal).catch(err =>
+    this.defectosService.enviarCorreoNuevoDefecto(
+      resultado.defectoFinal,
+      false,
+      resultado.ejecucionGuardada.evidencias,
+      resultado.ejecucionGuardada.observaciones,
+    ).catch(err =>
       this.logger.warn(`enviarCorreoNuevoDefecto ejecución→defecto#${resultado.defectoFinal.id}: ${err?.message ?? err}`),
     );
 
