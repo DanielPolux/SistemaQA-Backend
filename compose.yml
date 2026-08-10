@@ -31,6 +31,7 @@ services:
       DB_SYNC: "false"
     volumes:
       - ./SistemaQA-Backend/src:/app/src:delegated
+      - backend_uploads:/app/uploads
     ports:
       - "3000:3000"
     depends_on:
@@ -53,3 +54,4 @@ services:
 
 volumes:
   postgres_data:
+  backend_uploads:

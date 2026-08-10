@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS ejecuciones_caso_prueba (
   resultado          resultado_ejecucion NOT NULL,
   resultado_obtenido TEXT               NOT NULL,
   evidencia_url      VARCHAR(500),
+  evidencias         JSONB       NOT NULL DEFAULT '[]',
   defecto_id         INTEGER     REFERENCES defectos(id)               ON DELETE SET NULL,
   observaciones      TEXT,
   creado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW()

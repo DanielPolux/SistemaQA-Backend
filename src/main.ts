@@ -1,13 +1,18 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { UPLOADS_ROOT } from './uploads/uploads.constants';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.setGlobalPrefix('api');
+
+  // Sirve los archivos de evidencia subidos (ver UploadsModule) como estaticos.
+  app.useStaticAssets(UPLOADS_ROOT, { prefix: '/api/uploads/' });
 
   const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:4200')
     .split(',')

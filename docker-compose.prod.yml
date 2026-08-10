@@ -31,6 +31,8 @@ services:
     environment:
       DB_HOST: postgres
       DB_SYNC: "false"
+    volumes:
+      - backend_uploads:/app/uploads
     # No se publica al host: el frontend (nginx) lo alcanza por la red interna
     # como "backend:3000". Descomenta "ports" si necesitas pegarle directo para debug.
     # ports:
@@ -53,3 +55,4 @@ services:
 
 volumes:
   postgres_data:
+  backend_uploads:

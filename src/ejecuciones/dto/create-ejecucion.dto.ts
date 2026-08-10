@@ -1,7 +1,12 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { AmbienteEjecucion, ResultadoEjecucion } from '../entities/ejecucion-caso-prueba.entity';
 import { Type } from 'class-transformer';
 import { AmbienteDefecto, PrioridadDefecto, SeveridadDefecto } from '../../defectos/entities/defecto.entity';
+
+export class EvidenciaDto {
+  @IsString() @MaxLength(500) url: string;
+  @IsString() @MaxLength(255) nombre: string;
+}
 
 export class DefectoInlineDto {
   @IsString() @MaxLength(300) titulo: string;
@@ -51,9 +56,10 @@ export class CreateEjecucionDto {
   resultadoObtenido: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  evidenciaUrl?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EvidenciaDto)
+  evidencias?: EvidenciaDto[];
 
   @IsOptional()
   @Type(() => Number)

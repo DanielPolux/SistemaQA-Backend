@@ -73,6 +73,10 @@ export class EjecucionCasoPrueba {
   @Column({ name: 'evidencia_url', length: 500, nullable: true })
   evidenciaUrl: string;
 
+  /** Archivos de evidencia subidos (capturas, videos, logs) — ver UploadsModule */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  evidencias: { url: string; nombre: string }[];
+
   @Column({ name: 'defecto_id', nullable: true })
   defectoId: number;
 
