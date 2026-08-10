@@ -56,7 +56,7 @@ export class ArchivoService {
   private async obtenerEjecuciones(proyectoId: number): Promise<FilaEjecucion[]> {
     return this.proyectosRepo.manager.query(
       `SELECT e.id, e.fecha, e.resultado, e.ambiente, e.observaciones, e.evidencias,
-              cp.codigo AS caso_codigo, cp.titulo AS caso_titulo,
+              cp.codigo_cp AS caso_codigo, cp.nombre AS caso_titulo,
               u.nombre || ' ' || u.apellido AS tester_nombre
          FROM ejecuciones_caso_prueba e
          JOIN casos_prueba cp ON cp.id = e.caso_prueba_id
@@ -70,7 +70,7 @@ export class ArchivoService {
   private async obtenerDefectos(proyectoId: number): Promise<FilaDefecto[]> {
     return this.proyectosRepo.manager.query(
       `SELECT d.id, d.codigo, d.codigo_proyecto, d.titulo, d.estado, d.severidad, d.prioridad,
-              d.creado_en, cp.codigo AS caso_codigo
+              d.creado_en, cp.codigo_cp AS caso_codigo
          FROM defectos d
          LEFT JOIN casos_prueba cp ON cp.id = d.caso_prueba_id
         WHERE d.proyecto_id = $1

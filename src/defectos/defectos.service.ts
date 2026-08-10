@@ -383,14 +383,15 @@ export class DefectosService {
     const [reportador, proyecto, casoPrueba] = await Promise.all([
       this.usuariosRepo.findOne({ where: { id: defecto.reportadoPor } }),
       this.proyectosRepo.findOne({ where: { id: defecto.proyectoId }, relations: ['jefeProyecto'] }),
-      this.defectosRepo.manager.query('SELECT codigo FROM casos_prueba WHERE id = $1', [defecto.casoPruebaId]),
+      // codigo_cp es el nombre real de la columna en BD (la entidad la mapea a "codigo" en TS)
+      this.defectosRepo.manager.query('SELECT codigo_cp FROM casos_prueba WHERE id = $1', [defecto.casoPruebaId]),
     ]);
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
     const linkDefecto  = `${frontendUrl}/defectos/${defecto.id}`;
 
     const wordBuffer = await this.defectoWordService.generar(
-      { ...defecto, proyectoNombre: proyecto?.nombre ?? null, casoPruebaCodigo: casoPrueba?.[0]?.codigo ?? null } as any,
+      { ...defecto, proyectoNombre: proyecto?.nombre ?? null, casoPruebaCodigo: casoPrueba?.[0]?.codigo_cp ?? null } as any,
       evidencias,
       observacionesTester,
     );
