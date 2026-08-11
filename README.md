@@ -44,14 +44,14 @@ Swagger disponible en `http://localhost:3000/api/docs`.
 | `JWT_SECRET`     | —                                  | Requerido; usar valor seguro                        |
 | `JWT_EXPIRES_IN` | `24h`                              |                                                     |
 | `FRONTEND_URL`   | `http://localhost:4200`            | URL del frontend; se incluye en links de correo     |
-| `MAIL_HOST`      | `smtp.gmail.com`                   | SMTP para notificaciones                            |
+| `MAIL_HOST`      | `smtp-relay.brevo.com`             | SMTP para notificaciones (Brevo)                    |
 | `MAIL_PORT`      | `587`                              |                                                     |
 | `MAIL_SECURE`    | `false`                            | `true` para puerto 465                              |
-| `MAIL_USER`      | `cuenta@gmail.com`                 | Cuenta Gmail                                        |
-| `MAIL_PASS`      | —                                  | App Password de Google (no la contraseña de cuenta) |
-| `MAIL_FROM`      | `Sistema QA <cuenta@gmail.com>`    | Nombre y dirección del remitente                    |
+| `MAIL_USER`      | —                                  | Login SMTP de Brevo                                 |
+| `MAIL_PASS`      | —                                  | SMTP key de Brevo (Settings → SMTP & API)           |
+| `MAIL_FROM`      | `Sistema QA <remitente@dominio>`   | Nombre y dirección del remitente (debe estar verificado en Brevo) |
 
-> **Nota:** `MAIL_PASS` debe ser un App Password generado en la cuenta Google con 2FA activo.  
+> **Nota:** el remitente de `MAIL_FROM` debe estar verificado en Brevo (Senders, Domains & Dedicated IPs) o el envío falla.  
 > `DB_SYNC` es sobreescrito a `false` por `compose.yml` — no usar `synchronize: true` en Docker.
 
 ---
