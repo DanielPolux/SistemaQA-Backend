@@ -44,14 +44,17 @@ Swagger disponible en `http://localhost:3000/api/docs`.
 | `JWT_SECRET`     | —                                  | Requerido; usar valor seguro                        |
 | `JWT_EXPIRES_IN` | `24h`                              |                                                     |
 | `FRONTEND_URL`   | `http://localhost:4200`            | URL del frontend; se incluye en links de correo     |
-| `MAIL_HOST`      | `smtp-relay.brevo.com`             | SMTP para notificaciones (Brevo)                    |
+| `MAIL_HOST`      | `smtp-relay.sendinblue.com`        | SMTP para notificaciones (Brevo)                    |
 | `MAIL_PORT`      | `587`                              |                                                     |
 | `MAIL_SECURE`    | `false`                            | `true` para puerto 465                              |
 | `MAIL_USER`      | —                                  | Login SMTP de Brevo                                 |
 | `MAIL_PASS`      | —                                  | SMTP key de Brevo (Settings → SMTP & API)           |
 | `MAIL_FROM`      | `Sistema QA <remitente@dominio>`   | Nombre y dirección del remitente (debe estar verificado en Brevo) |
 
-> **Nota:** el remitente de `MAIL_FROM` debe estar verificado en Brevo (Senders, Domains & Dedicated IPs) o el envío falla.  
+> **Nota:** el remitente de `MAIL_FROM` debe estar verificado en Brevo (Senders, Domains & Dedicated IPs) o el envío falla.
+> **Nota:** usar `smtp-relay.sendinblue.com` como `MAIL_HOST`, no `smtp-relay.brevo.com` — el
+> certificado TLS que entrega el edge de Brevo solo cubre `*.sendinblue.com`, así que el
+> hostname `brevo.com` falla la verificación TLS del cliente SMTP.  
 > `DB_SYNC` es sobreescrito a `false` por `compose.yml` — no usar `synchronize: true` en Docker.
 
 ---
