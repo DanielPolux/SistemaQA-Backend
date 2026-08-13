@@ -13,6 +13,7 @@ import { Usuario } from '../../usuarios/entities/usuario.entity';
 
 export enum TipoCasoPrueba {
   FUNCIONAL    = 'Funcional',
+  NO_FUNCIONAL = 'No Funcional',
   REGRESION    = 'Regresión',
   HUMO         = 'Humo',
   INTEGRACION  = 'Integración',

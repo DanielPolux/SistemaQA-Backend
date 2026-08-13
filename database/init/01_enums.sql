@@ -82,6 +82,7 @@ END $$;
 DO $$ BEGIN
   CREATE TYPE tipo_caso_prueba AS ENUM (
     'Funcional',
+    'No Funcional',
     'Regresión',
     'Humo',
     'Integración',
