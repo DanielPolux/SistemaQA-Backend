@@ -80,6 +80,28 @@ export class CiclosPruebaService {
          FROM ciclo_casos_planificados
          WHERE ciclo_id = $1
        ),
+       -- Alcance del Plan de Pruebas vinculado al ciclo (si tiene uno): los
+       -- casos de sus requerimientos, respetando la selección específica por
+       -- requerimiento en plan_casos_prueba (si no hay override, van TODOS
+       -- los casos de ese requerimiento -- ver planes-prueba.service.ts).
+       plan_casos AS (
+         SELECT DISTINCT cp2.id AS caso_prueba_id
+         FROM ciclos_prueba c
+         JOIN plan_requerimientos pr ON pr.plan_id = c.plan_prueba_id
+         JOIN casos_prueba cp2       ON cp2.requerimiento_id = pr.requerimiento_id
+         WHERE c.id = $1
+           AND c.plan_prueba_id IS NOT NULL
+           AND (
+             NOT EXISTS (
+               SELECT 1 FROM plan_casos_prueba pcp
+               WHERE pcp.plan_id = pr.plan_id AND pcp.requerimiento_id = pr.requerimiento_id
+             )
+             OR EXISTS (
+               SELECT 1 FROM plan_casos_prueba pcp
+               WHERE pcp.plan_id = pr.plan_id AND pcp.caso_prueba_id = cp2.id
+             )
+           )
+       ),
        ultima_ejec AS (
          SELECT DISTINCT ON (e.caso_prueba_id)
            e.caso_prueba_id,
@@ -111,9 +133,21 @@ export class CiclosPruebaService {
        LEFT JOIN planificados pl ON pl.caso_prueba_id = cp.id
        LEFT JOIN ultima_ejec ue  ON ue.caso_prueba_id = cp.id
        WHERE (
+         -- 1) Selección explícita de re-ejecución (checklist al crear el ciclo)
          (EXISTS (SELECT 1 FROM planificados) AND pl.caso_prueba_id IS NOT NULL)
          OR
+         -- 2) Ya tiene una ejecución registrada en este ciclo: se conserva
+         --    aunque el alcance del plan haya cambiado después
+         ue.caso_prueba_id IS NOT NULL
+         OR
+         -- 3) Sin selección explícita: alcance del Plan de Pruebas vinculado (si tiene)
          (NOT EXISTS (SELECT 1 FROM planificados)
+          AND EXISTS (SELECT 1 FROM plan_casos)
+          AND cp.id IN (SELECT caso_prueba_id FROM plan_casos))
+         OR
+         -- 4) Sin selección explícita ni plan con requerimientos: todos los casos del proyecto
+         (NOT EXISTS (SELECT 1 FROM planificados)
+          AND NOT EXISTS (SELECT 1 FROM plan_casos)
           AND cp.proyecto_id = (SELECT proyecto_id FROM ciclos_prueba WHERE id = $1))
        )
        ORDER BY cp.codigo_cp`,
