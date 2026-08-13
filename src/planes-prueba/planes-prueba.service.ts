@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlanPrueba, EstadoPlan } from './entities/plan-prueba.entity';
-import { CreatePlanPruebaDto } from './dto/create-plan-prueba.dto';
+import { CreatePlanPruebaDto, CasoSeleccionDto } from './dto/create-plan-prueba.dto';
 import { userProjectFilter } from '../common/helpers/user-access.helper';
 
 @Injectable()
@@ -98,10 +98,12 @@ export class PlanesPruebaService {
            COUNT(DISTINCT cp.id)::int                                                 AS "totalCasos",
            COUNT(DISTINCT CASE WHEN ult.resultado IS NOT NULL THEN cp.id END)::int    AS "casosEjecutados",
            COUNT(DISTINCT CASE WHEN ult.resultado = 'Aprobado' THEN cp.id END)::int  AS "casosAprobados",
-           COUNT(DISTINCT CASE WHEN ult.resultado IN ('Fallido','Bloqueado') THEN cp.id END)::int AS "casosFallidos"
+           COUNT(DISTINCT CASE WHEN ult.resultado IN ('Fallido','Bloqueado') THEN cp.id END)::int AS "casosFallidos",
+           array_remove(array_agg(DISTINCT cp.id), NULL)                              AS "casoIds"
          FROM plan_requerimientos pr
          JOIN requerimientos r ON r.id = pr.requerimiento_id
          LEFT JOIN casos_prueba cp ON cp.requerimiento_id = r.id
+           AND ${this.filtroCasosPlan()}
          LEFT JOIN LATERAL (
            SELECT e.resultado
            FROM ejecuciones_caso_prueba e
@@ -152,7 +154,7 @@ export class PlanesPruebaService {
       if (uRow) responsableNombre = `${uRow.nombre} ${uRow.apellido}`;
     }
 
-    const { requerimientoIds, ...planData } = dto;
+    const { requerimientoIds, casosSeleccionados, ...planData } = dto;
     const plan = this.repo.create({
       ...planData,
       sprint:            dto.sprint       ?? null,
@@ -167,6 +169,9 @@ export class PlanesPruebaService {
 
     if (requerimientoIds?.length) {
       await this.syncRequerimientos(saved.id, requerimientoIds);
+    }
+    if (dto.casosSeleccionados?.length) {
+      await this.syncCasosPrueba(saved.id, dto.casosSeleccionados);
     }
 
     // Auto-advance state based on linked requerimientos
@@ -194,12 +199,15 @@ export class PlanesPruebaService {
       }
     }
 
-    const { requerimientoIds, ...planData } = dto as any;
+    const { requerimientoIds, casosSeleccionados, ...planData } = dto as any;
     Object.assign(plan, planData);
     await this.repo.save(plan);
 
     if (requerimientoIds !== undefined) {
       await this.syncRequerimientos(id, requerimientoIds ?? []);
+    }
+    if (casosSeleccionados !== undefined) {
+      await this.syncCasosPrueba(id, casosSeleccionados ?? []);
     }
 
     // Auto-recalculate state unless manually closed
@@ -223,6 +231,41 @@ export class PlanesPruebaService {
         [planId, reqId],
       );
     }
+  }
+
+  // Selección de casos específicos por requerimiento (override de "todos los
+  // casos"). Un requerimiento ausente de `seleccion` sigue cubriéndose con
+  // todos sus casos — ver filtroCasosPlan().
+  async syncCasosPrueba(planId: number, seleccion: CasoSeleccionDto[]): Promise<void> {
+    await this.repo.manager.query(
+      `DELETE FROM plan_casos_prueba WHERE plan_id = $1`, [planId],
+    );
+    for (const { requerimientoId, casoIds } of seleccion) {
+      for (const casoId of casoIds) {
+        await this.repo.manager.query(
+          `INSERT INTO plan_casos_prueba (plan_id, requerimiento_id, caso_prueba_id)
+           VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+          [planId, requerimientoId, casoId],
+        );
+      }
+    }
+  }
+
+  // Condición de JOIN reutilizada en findOne() y getTrazabilidad(): si el
+  // requerimiento (r.id) no tiene selección custom en plan_casos_prueba para
+  // este plan (pr.plan_id), se incluyen TODOS sus casos; si tiene, solo los
+  // casos explícitamente seleccionados.
+  private filtroCasosPlan(): string {
+    return `(
+      NOT EXISTS (
+        SELECT 1 FROM plan_casos_prueba pcp
+        WHERE pcp.plan_id = pr.plan_id AND pcp.requerimiento_id = r.id
+      )
+      OR EXISTS (
+        SELECT 1 FROM plan_casos_prueba pcp
+        WHERE pcp.plan_id = pr.plan_id AND pcp.caso_prueba_id = cp.id
+      )
+    )`;
   }
 
   async cerrar(id: number): Promise<any> {
@@ -270,6 +313,7 @@ export class PlanesPruebaService {
        FROM plan_requerimientos pr
        JOIN requerimientos r ON r.id = pr.requerimiento_id
        LEFT JOIN casos_prueba cp ON cp.requerimiento_id = r.id
+         AND ${this.filtroCasosPlan()}
        LEFT JOIN LATERAL (
          SELECT e.resultado, e.creado_en
          FROM ejecuciones_caso_prueba e

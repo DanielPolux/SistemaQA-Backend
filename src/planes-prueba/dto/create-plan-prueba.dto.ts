@@ -1,8 +1,18 @@
 import {
   IsArray, IsDateString, IsNotEmpty, IsNumber,
-  IsOptional, IsString, MaxLength,
+  IsOptional, IsString, MaxLength, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export class CasoSeleccionDto {
+  @Type(() => Number)
+  @IsNumber()
+  requerimientoId: number;
+
+  @IsArray()
+  @IsNumber({}, { each: true })
+  casoIds: number[];
+}
 
 export class CreatePlanPruebaDto {
   @Type(() => Number)
@@ -62,4 +72,13 @@ export class CreatePlanPruebaDto {
   @IsArray()
   @IsNumber({}, { each: true })
   requerimientoIds?: number[];
+
+  // Casos de prueba específicos a cubrir por requerimiento. Un requerimiento
+  // sin entrada aquí sigue cubriéndose con TODOS sus casos (comportamiento
+  // por defecto, compatible con planes existentes).
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CasoSeleccionDto)
+  casosSeleccionados?: CasoSeleccionDto[];
 }
