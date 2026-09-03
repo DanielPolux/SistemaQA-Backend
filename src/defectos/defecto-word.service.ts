@@ -4,7 +4,7 @@ import { join } from 'path';
 import { imageSize } from 'image-size';
 import {
   AlignmentType, BorderStyle, Document, HeadingLevel, ImageRun, Packer,
-  Paragraph, Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
+  Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, VerticalAlign, WidthType,
 } from 'docx';
 import { Defecto } from './entities/defecto.entity';
 import { UPLOADS_ROOT } from '../uploads/uploads.constants';
@@ -180,21 +180,26 @@ export class DefectoWordService {
   }
 
   private infoTable(rows: [string, string][]): Table {
+    const tableWidth = 9000;
+    const labelWidth = 1620;
+    const detailWidth = tableWidth - labelWidth;
     return new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: tableWidth, type: WidthType.DXA },
+      layout: TableLayoutType.FIXED,
+      columnWidths: [labelWidth, detailWidth],
       margins: { bottom: 240 },
       rows: rows.map(([label, value]) =>
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 18, type: WidthType.PERCENTAGE },
+              width: { size: labelWidth, type: WidthType.DXA },
               verticalAlign: VerticalAlign.CENTER,
               shading: { fill: 'EEF2F7' },
               margins: { top: 80, bottom: 80, left: 120, right: 120 },
               children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 20, color: '374151' })] })],
             }),
             new TableCell({
-              width: { size: 82, type: WidthType.PERCENTAGE },
+              width: { size: detailWidth, type: WidthType.DXA },
               verticalAlign: VerticalAlign.CENTER,
               margins: { top: 80, bottom: 80, left: 120, right: 120 },
               children: [new Paragraph({ children: [new TextRun({ text: value, size: 20 })] })],
