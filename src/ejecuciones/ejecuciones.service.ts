@@ -106,6 +106,12 @@ export class EjecucionesService {
     await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId);
 
     const { defectoData, ...ejecucionFields } = dto;
+    if (ejecucionFields.cicloId) {
+      const cantidad = await this.repo.count({
+        where: { casoPruebaId: ejecucionFields.casoPruebaId, cicloId: ejecucionFields.cicloId },
+      });
+      ejecucionFields.version = `E${String(cantidad + 1).padStart(2, '0')}`;
+    }
     const esFallido = ejecucionFields.resultado === ResultadoEjecucion.FALLIDO;
 
     if (!esFallido || !defectoData) {
@@ -233,16 +239,17 @@ export class EjecucionesService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findByCasoPrueba(casoPruebaId: number): Promise<any[]> {
-    const items = await this.repo
+  async findByCasoPrueba(casoPruebaId: number, cicloId?: number): Promise<any[]> {
+    const qb = this.repo
       .createQueryBuilder('e')
       .leftJoin('e.tester',        't' ).addSelect(['t.nombre',  't.apellido'])
       .leftJoin('e.defecto',       'd' ).addSelect(['d.codigo',  'd.codigoProyecto', 'd.titulo'])
       .leftJoin('e.ciclo',         'ci').addSelect(['ci.nombre', 'ci.estado'])
       .leftJoin('e.desarrollador', 'dv').addSelect(['dv.nombre', 'dv.apellido'])
       .where('e.casoPruebaId = :id', { id: casoPruebaId })
-      .orderBy('e.creadoEn', 'DESC')
-      .getMany();
+      .orderBy('e.creadoEn', 'DESC');
+    if (cicloId) qb.andWhere('e.cicloId = :cicloId', { cicloId });
+    const items = await qb.getMany();
 
     return items.map(e => this.mapEjecucion(e));
   }

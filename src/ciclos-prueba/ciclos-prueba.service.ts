@@ -106,6 +106,7 @@ export class CiclosPruebaService {
          SELECT DISTINCT ON (e.caso_prueba_id)
            e.caso_prueba_id,
            e.resultado,
+           e.version,
            e.id          AS ejecucion_id,
            e.creado_en
          FROM ejecuciones_caso_prueba e
@@ -126,6 +127,9 @@ export class CiclosPruebaService {
          cp.requerimiento_id   AS "requerimientoId",
          r.estado              AS "requerimientoEstado",
          ue.resultado          AS "resultadoCiclo",
+         ue.version            AS "ultimaVersion",
+         (SELECT COUNT(*)::int FROM ejecuciones_caso_prueba ec
+          WHERE ec.caso_prueba_id = cp.id AND ec.ciclo_id = $1) AS "totalEjecucionesCiclo",
          ue.ejecucion_id       AS "ejecucionId",
          ue.creado_en          AS "fechaEjecucion"
        FROM casos_prueba cp

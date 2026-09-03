@@ -33,7 +33,7 @@ export class EjecucionesController {
 
   @Get('caso-prueba/:id')
   @ApiOperation({ summary: 'Historial de ejecuciones de un caso de prueba' })
-  findByCasoPrueba(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findByCasoPrueba(id);
+  findByCasoPrueba(@Param('id', ParseIntPipe) id: number, @Query('cicloId') cicloId?: string) {
+    return this.service.findByCasoPrueba(id, cicloId ? Number(cicloId) : undefined);
   }
 }
