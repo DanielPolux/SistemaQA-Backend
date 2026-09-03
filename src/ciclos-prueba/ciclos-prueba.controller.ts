@@ -1,7 +1,9 @@
 import {
   Body, Controller, Delete, Get, Param,
   Patch, Post, Put, Query, UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -11,6 +13,7 @@ import { CiclosPruebaService } from './ciclos-prueba.service';
 import { CreateCicloPruebaDto } from './dto/create-ciclo-prueba.dto';
 import { QueryCicloPruebaDto } from './dto/query-ciclo-prueba.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
+import { CerrarCicloDto } from './dto/cerrar-ciclo.dto';
 
 const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 
@@ -45,6 +48,19 @@ export class CiclosPruebaController {
     return this.service.getCasosDeCiclo(+id);
   }
 
+  @Get(':id/informes')
+  listarInformes(@Param('id') id: string) {
+    return this.service.listarInformes(+id);
+  }
+
+  @Get(':id/informes/:informeId/word')
+  async descargarInforme(@Param('id') id: string, @Param('informeId') informeId: string, @Res() res: Response) {
+    const archivo = await this.service.generarInformeWord(+id, +informeId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${archivo.nombre}"`);
+    res.send(archivo.buffer);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener ciclo por ID' })
   findOne(@Param('id') id: string) {
@@ -71,8 +87,8 @@ export class CiclosPruebaController {
   @UseGuards(RolesGuard)
   @Roles(...ROLES_GESTION)
   @ApiOperation({ summary: 'Cerrar ciclo de prueba' })
-  cerrar(@Param('id') id: string) {
-    return this.service.cerrar(+id);
+  cerrar(@Param('id') id: string, @Body() dto: CerrarCicloDto, @CurrentUser() user: Usuario) {
+    return this.service.cerrar(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Patch(':id/reabrir')

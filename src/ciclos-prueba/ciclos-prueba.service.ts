@@ -6,12 +6,21 @@ import { CreateCicloPruebaDto } from './dto/create-ciclo-prueba.dto';
 import { QueryCicloPruebaDto } from './dto/query-ciclo-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { userProjectFilter } from '../common/helpers/user-access.helper';
+import { InformeCierreCiclo } from './entities/informe-cierre-ciclo.entity';
+import { CerrarCicloDto } from './dto/cerrar-ciclo.dto';
+import { MailService } from '../mail/mail.service';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx';
 
 @Injectable()
 export class CiclosPruebaService {
   constructor(
     @InjectRepository(CicloPrueba)
     private repo: Repository<CicloPrueba>,
+    @InjectRepository(InformeCierreCiclo)
+    private informesRepo: Repository<InformeCierreCiclo>,
+    private mailService: MailService,
+    private auditoriaService: AuditoriaService,
   ) {}
 
   async findAll(query: QueryCicloPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
@@ -288,7 +297,7 @@ export class CiclosPruebaService {
     return this.repo.save(ciclo);
   }
 
-  async cerrar(id: number): Promise<CicloPrueba> {
+  async cerrar(id: number, dto: CerrarCicloDto, usuarioId: number, usuarioNombre: string): Promise<any> {
     const ciclo = await this.findOne(id);
     const casos = await this.getCasosDeCiclo(id);
     if (!casos.length) {
@@ -298,9 +307,78 @@ export class CiclosPruebaService {
     if (pendientes > 0) {
       throw new BadRequestException(`No se puede finalizar el ciclo: quedan ${pendientes} caso(s) pendientes.`);
     }
+    const bloqueados = casos.filter(c => c.resultadoCiclo === 'Bloqueado').length;
+    if (bloqueados > 0 && !dto.justificacionBloqueados?.trim()) {
+      throw new BadRequestException('Debes justificar los casos bloqueados antes de finalizar el ciclo.');
+    }
+    const defectos = await this.getDefectosCiclo(id);
+    const aprobados = casos.filter(c => c.resultadoCiclo === 'Aprobado').length;
+    const fallidos = casos.filter(c => c.resultadoCiclo === 'Fallido').length;
+    const omitidos = casos.filter(c => c.resultadoCiclo === 'Omitido').length;
+    const criticosAltosAbiertos = defectos.filter(d => ['Crítico', 'Alto'].includes(d.severidad) && !['Cerrado', 'Rechazado'].includes(d.estado)).length;
+    const resultadoGlobal = fallidos > 0 || bloqueados > 0 || criticosAltosAbiertos > 0
+      ? 'No aprobado'
+      : omitidos > 0 ? 'Aprobado con observaciones' : 'Aprobado';
+    const ultimo = await this.informesRepo.findOne({ where: { cicloId: id }, order: { version: 'DESC' } });
+    const resumen = {
+      total: casos.length, aprobados, fallidos, bloqueados, omitidos,
+      porcentajeAprobacion: Math.round(aprobados * 100 / casos.length),
+      defectosAbiertos: defectos.filter(d => !['Cerrado', 'Rechazado'].includes(d.estado)).length,
+      criticosAltosAbiertos,
+      casos: casos.map(c => ({ codigo: c.codigo, nombre: c.nombre, resultado: c.resultadoCiclo, version: c.ultimaVersion })),
+      defectos: defectos.map(d => ({ codigo: d.codigo, titulo: d.titulo, severidad: d.severidad, estado: d.estado })),
+    };
+    const informe = await this.informesRepo.save(this.informesRepo.create({
+      cicloId: id, version: (ultimo?.version ?? 0) + 1, resultadoGlobal,
+      recomendacionQa: dto.recomendacionQa, conclusionQa: dto.conclusionQa.trim(),
+      justificacionBloqueados: dto.justificacionBloqueados?.trim() || null,
+      resumen, generadoPor: usuarioId,
+    }));
     ciclo.estado = EstadoCiclo.CERRADO;
     if (!ciclo.fechaFin) ciclo.fechaFin = new Date() as any;
-    return this.repo.save(ciclo);
+    const saved = await this.repo.save(ciclo);
+    await this.auditoriaService.registrar({ entidad: 'CicloPrueba', entidadId: id, usuarioId, usuarioNombre, accion: 'Cerrado', valorNuevo: `${resultadoGlobal} | ${dto.recomendacionQa} | Informe E${String(informe.version).padStart(2, '0')}` });
+    await this.enviarInformeCierre(saved, informe).catch(() => undefined);
+    return { ...saved, resultadoGlobal, recomendacionQa: informe.recomendacionQa, conclusionQa: informe.conclusionQa, informeVersion: informe.version, informeId: informe.id, resumen };
+  }
+
+  async listarInformes(cicloId: number): Promise<any[]> {
+    const informes = await this.informesRepo.find({ where: { cicloId }, relations: ['generador'], order: { version: 'DESC' } });
+    return informes.map(i => ({ ...i, generadoPorNombre: i.generador ? `${i.generador.nombre} ${i.generador.apellido}` : null, generador: undefined }));
+  }
+
+  async generarInformeWord(cicloId: number, informeId: number): Promise<{ buffer: Buffer; nombre: string }> {
+    const ciclo = await this.findOne(cicloId);
+    const informe = await this.informesRepo.findOne({ where: { id: informeId, cicloId }, relations: ['generador'] });
+    if (!informe) throw new NotFoundException('Informe de cierre no encontrado');
+    const r: any = informe.resumen;
+    const filas = (items: any[][]) => new Table({ width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED, columnWidths: [2250, 6750], rows: items.map(([a, b]) => new TableRow({ children: [new TableCell({ width: { size: 2250, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: String(a), bold: true })] })] }), new TableCell({ width: { size: 6750, type: WidthType.DXA }, children: [new Paragraph(String(b ?? '—'))] })] })) });
+    const titulo = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 100 }, children: [new TextRun({ text: t, bold: true, color: '1E3A5F' })] });
+    const doc = new Document({ sections: [{ children: [
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'INFORME DE CIERRE DE CICLO DE PRUEBAS', bold: true, size: 32, color: '1E3A5F' })] }),
+      titulo('IDENTIFICACIÓN'), filas([['Proyecto', `${ciclo.proyectoCodigo} - ${ciclo.proyectoNombre}`], ['Plan de pruebas', ciclo.planNombre], ['Ciclo', ciclo.nombre], ['Ambiente', ciclo.ambiente], ['Versión del informe', `E${String(informe.version).padStart(2, '0')}`], ['Fecha de cierre', new Date(informe.creadoEn).toLocaleString('es-PE')], ['Responsable del cierre', informe.generador ? `${informe.generador.nombre} ${informe.generador.apellido}` : '—']]),
+      titulo('RESULTADO GLOBAL'), filas([['Resultado', informe.resultadoGlobal], ['Recomendación QA', informe.recomendacionQa], ['Aprobación', `${r.porcentajeAprobacion}%`], ['Casos aprobados', r.aprobados], ['Casos fallidos', r.fallidos], ['Casos bloqueados', r.bloqueados], ['Casos omitidos', r.omitidos], ['Defectos abiertos', r.defectosAbiertos], ['Críticos/altos abiertos', r.criticosAltosAbiertos]]),
+      titulo('CONCLUSIÓN QA'), new Paragraph(informe.conclusionQa),
+      ...(informe.justificacionBloqueados ? [titulo('JUSTIFICACIÓN DE BLOQUEOS'), new Paragraph(informe.justificacionBloqueados)] : []),
+      titulo('CASOS DE PRUEBA'), ...r.casos.map((c: any) => new Paragraph(`${c.codigo} - ${c.nombre}: ${c.resultado} (${c.version ?? '—'})`)),
+      titulo('DEFECTOS'), ...(r.defectos.length ? r.defectos.map((d: any) => new Paragraph(`${d.codigo} - ${d.titulo}: ${d.severidad} / ${d.estado}`)) : [new Paragraph('No se registraron defectos.')]),
+    ] }] });
+    return { buffer: await Packer.toBuffer(doc), nombre: `${ciclo.proyectoCodigo}-${ciclo.nombre}-INFORME-CIERRE-E${String(informe.version).padStart(2, '0')}.docx`.replace(/[^a-zA-Z0-9_.-]+/g, '-') };
+  }
+
+  private getDefectosCiclo(cicloId: number): Promise<any[]> {
+    return this.repo.manager.query(`SELECT DISTINCT d.codigo_proyecto AS codigo, d.titulo, d.severidad, d.estado, u.email AS asignado_email FROM defectos d JOIN ejecuciones_caso_prueba e ON e.defecto_id = d.id LEFT JOIN usuarios u ON u.id = d.asignado_a WHERE e.ciclo_id = $1 ORDER BY d.codigo_proyecto`, [cicloId]);
+  }
+
+  private async enviarInformeCierre(ciclo: any, informe: InformeCierreCiclo): Promise<void> {
+    const [proyecto] = await this.repo.manager.query(`SELECT p.codigo, p.nombre, jp.email AS jefe_proyecto_email, jq.email AS jefe_qa_email, rqa.email AS responsable_qa_email FROM proyectos p LEFT JOIN usuarios jp ON jp.id=p.jefe_proyecto_id LEFT JOIN usuarios jq ON jq.id=p.jefe_qa_id LEFT JOIN usuarios rqa ON rqa.id=p.responsable_qa_id WHERE p.id=$1`, [ciclo.proyectoId]);
+    if (!proyecto?.jefe_proyecto_email) return;
+    const defectos = await this.getDefectosCiclo(ciclo.id);
+    const copia = [...new Set([proyecto.jefe_qa_email, proyecto.responsable_qa_email, ...defectos.map(d => d.asignado_email)].filter(Boolean))];
+    const archivo = await this.generarInformeWord(ciclo.id, informe.id);
+    await this.mailService.send({ to: proyecto.jefe_proyecto_email, cc: copia, subject: `[Cierre QA] ${proyecto.codigo} - ${ciclo.nombre}: ${informe.resultadoGlobal}`, html: `<p>Se finalizó el ciclo <strong>${ciclo.nombre}</strong>.</p><p><strong>Resultado:</strong> ${informe.resultadoGlobal}<br><strong>Recomendación QA:</strong> ${informe.recomendacionQa}</p><p>${informe.conclusionQa}</p>`, attachments: [{ filename: archivo.nombre, content: archivo.buffer }] });
+    informe.correoEnviadoEn = new Date();
+    await this.informesRepo.save(informe);
   }
 
   async reabrir(id: number): Promise<CicloPrueba> {

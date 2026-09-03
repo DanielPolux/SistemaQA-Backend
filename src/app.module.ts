@@ -22,6 +22,7 @@ import { Defecto } from './defectos/entities/defecto.entity';
 import { ComentarioDefecto } from './defectos/entities/comentario-defecto.entity';
 import { EjecucionCasoPrueba } from './ejecuciones/entities/ejecucion-caso-prueba.entity';
 import { CicloPrueba } from './ciclos-prueba/entities/ciclo-prueba.entity';
+import { InformeCierreCiclo } from './ciclos-prueba/entities/informe-cierre-ciclo.entity';
 import { CiclosPruebaModule } from './ciclos-prueba/ciclos-prueba.module';
 import { PlanesPruebaModule } from './planes-prueba/planes-prueba.module';
 import { PlanPrueba } from './planes-prueba/entities/plan-prueba.entity';
@@ -64,6 +65,7 @@ import { ArchivoModule } from './archivo/archivo.module';
           ComentarioDefecto,
           EjecucionCasoPrueba,
           CicloPrueba,
+          InformeCierreCiclo,
           PlanPrueba,
           Auditoria,
           Catalogo,
