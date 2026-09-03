@@ -353,6 +353,27 @@ export class CiclosPruebaService {
     if (!informe) throw new NotFoundException('Informe de cierre no encontrado');
     const r: any = informe.resumen;
     const filas = (items: any[][]) => new Table({ width: { size: 9000, type: WidthType.DXA }, layout: TableLayoutType.FIXED, columnWidths: [2250, 6750], rows: items.map(([a, b]) => new TableRow({ children: [new TableCell({ width: { size: 2250, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: String(a), bold: true })] })] }), new TableCell({ width: { size: 6750, type: WidthType.DXA }, children: [new Paragraph(String(b ?? '—'))] })] })) });
+    const tablaListado = (cabeceras: string[], datos: any[][], anchos: number[]) => new Table({
+      width: { size: 9000, type: WidthType.DXA },
+      layout: TableLayoutType.FIXED,
+      columnWidths: anchos,
+      rows: [
+        new TableRow({
+          tableHeader: true,
+          children: cabeceras.map((cabecera, i) => new TableCell({
+            width: { size: anchos[i], type: WidthType.DXA },
+            shading: { fill: 'DCE6F1' },
+            children: [new Paragraph({ children: [new TextRun({ text: cabecera, bold: true, color: '1E3A5F' })] })],
+          })),
+        }),
+        ...datos.map(fila => new TableRow({
+          children: fila.map((valor, i) => new TableCell({
+            width: { size: anchos[i], type: WidthType.DXA },
+            children: [new Paragraph(String(valor ?? '—'))],
+          })),
+        })),
+      ],
+    });
     const titulo = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 100 }, children: [new TextRun({ text: t, bold: true, color: '1E3A5F' })] });
     const doc = new Document({ sections: [{ children: [
       new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'INFORME DE CIERRE DE CICLO DE PRUEBAS', bold: true, size: 32, color: '1E3A5F' })] }),
@@ -360,8 +381,20 @@ export class CiclosPruebaService {
       titulo('RESULTADO GLOBAL'), filas([['Resultado', informe.resultadoGlobal], ['Recomendación QA', informe.recomendacionQa], ['Aprobación', `${r.porcentajeAprobacion}%`], ['Casos aprobados', r.aprobados], ['Casos fallidos', r.fallidos], ['Casos bloqueados', r.bloqueados], ['Casos omitidos', r.omitidos], ['Defectos abiertos', r.defectosAbiertos], ['Críticos/altos abiertos', r.criticosAltosAbiertos]]),
       titulo('CONCLUSIÓN QA'), new Paragraph(informe.conclusionQa),
       ...(informe.justificacionBloqueados ? [titulo('JUSTIFICACIÓN DE BLOQUEOS'), new Paragraph(informe.justificacionBloqueados)] : []),
-      titulo('CASOS DE PRUEBA'), ...r.casos.map((c: any) => new Paragraph(`${c.codigo} - ${c.nombre}: ${c.resultado} (${c.version ?? '—'})`)),
-      titulo('DEFECTOS'), ...(r.defectos.length ? r.defectos.map((d: any) => new Paragraph(`${d.codigo} - ${d.titulo}: ${d.severidad} / ${d.estado}`)) : [new Paragraph('No se registraron defectos.')]),
+      titulo('CASOS DE PRUEBA'),
+      tablaListado(
+        ['Código', 'Caso de prueba', 'Resultado', 'Ejecución'],
+        r.casos.map((c: any) => [c.codigo, c.nombre, c.resultado, c.version ?? '—']),
+        [1400, 4200, 1800, 1600],
+      ),
+      titulo('DEFECTOS'),
+      tablaListado(
+        ['Código', 'Defecto', 'Severidad', 'Estado'],
+        r.defectos.length
+          ? r.defectos.map((d: any) => [d.codigo, d.titulo, d.severidad, d.estado])
+          : [['—', 'No se registraron defectos.', '—', '—']],
+        [1400, 4200, 1700, 1700],
+      ),
     ] }] });
     return { buffer: await Packer.toBuffer(doc), nombre: `${ciclo.proyectoCodigo}-${ciclo.nombre}-INFORME-CIERRE-E${String(informe.version).padStart(2, '0')}.docx`.replace(/[^a-zA-Z0-9_.-]+/g, '-') };
   }
