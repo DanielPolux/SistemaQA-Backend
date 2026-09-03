@@ -106,6 +106,22 @@ export class EjecucionesService {
     await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId);
 
     const { defectoData, ...ejecucionFields } = dto;
+    if (ejecucionFields.resultado === ResultadoEjecucion.BLOQUEADO) {
+      if (!ejecucionFields.bloqueadoPorCasoId || !ejecucionFields.defectoId || !ejecucionFields.cicloId) {
+        throw new BadRequestException('Una ejecución bloqueada requiere el caso y defecto que originan el bloqueo.');
+      }
+      const [relacion] = await this.dataSource.manager.query(
+        `SELECT 1
+         FROM ejecuciones_caso_prueba e
+         JOIN defectos d ON d.id = $3 AND d.caso_prueba_id = $2
+         WHERE e.ciclo_id = $1 AND e.caso_prueba_id = $2 AND e.resultado = 'Fallido'
+         LIMIT 1`,
+        [ejecucionFields.cicloId, ejecucionFields.bloqueadoPorCasoId, ejecucionFields.defectoId],
+      );
+      if (!relacion) throw new BadRequestException('El caso o defecto seleccionado no corresponde a un fallo de este ciclo.');
+    } else {
+      ejecucionFields.bloqueadoPorCasoId = undefined;
+    }
     if (ejecucionFields.cicloId) {
       const cantidad = await this.repo.count({
         where: { casoPruebaId: ejecucionFields.casoPruebaId, cicloId: ejecucionFields.cicloId },
@@ -204,6 +220,7 @@ export class EjecucionesService {
     const qb = this.repo
       .createQueryBuilder('e')
       .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre'])
+      .leftJoin('e.bloqueadoPorCaso', 'bcp').addSelect(['bcp.codigo', 'bcp.nombre'])
       .leftJoin('e.proyecto',      'p' ).addSelect(['p.nombre',  'p.codigo'])
       .leftJoin('e.tester',        't' ).addSelect(['t.nombre',  't.apellido'])
       .leftJoin('e.defecto',       'd' ).addSelect(['d.codigo',  'd.codigoProyecto', 'd.titulo'])
@@ -242,6 +259,9 @@ export class EjecucionesService {
   async findByCasoPrueba(casoPruebaId: number, cicloId?: number): Promise<any[]> {
     const qb = this.repo
       .createQueryBuilder('e')
+      .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre'])
+      .leftJoin('e.bloqueadoPorCaso', 'bcp').addSelect(['bcp.codigo', 'bcp.nombre'])
+      .leftJoin('e.proyecto',      'p' ).addSelect(['p.nombre',  'p.codigo'])
       .leftJoin('e.tester',        't' ).addSelect(['t.nombre',  't.apellido'])
       .leftJoin('e.defecto',       'd' ).addSelect(['d.codigo',  'd.codigoProyecto', 'd.titulo'])
       .leftJoin('e.ciclo',         'ci').addSelect(['ci.nombre', 'ci.estado'])
@@ -259,6 +279,8 @@ export class EjecucionesService {
       ...e,
       casoPruebaCodigo:    e.casoPrueba?.codigo ?? null,
       casoPruebaNombre:    e.casoPrueba?.nombre ?? null,
+      bloqueadoPorCasoCodigo: e.bloqueadoPorCaso?.codigo ?? null,
+      bloqueadoPorCasoNombre: e.bloqueadoPorCaso?.nombre ?? null,
       proyectoNombre:      e.proyecto?.nombre   ?? null,
       proyectoCodigo:      e.proyecto?.codigo   ?? null,
       testerNombre:        e.tester ? `${e.tester.nombre} ${e.tester.apellido}` : null,
@@ -268,6 +290,7 @@ export class EjecucionesService {
       cicloEstado:         e.ciclo?.estado          ?? null,
       desarrolladorNombre: e.desarrollador ? `${e.desarrollador.nombre} ${e.desarrollador.apellido}` : null,
       casoPrueba:    undefined,
+      bloqueadoPorCaso: undefined,
       proyecto:      undefined,
       tester:        undefined,
       defecto:       undefined,

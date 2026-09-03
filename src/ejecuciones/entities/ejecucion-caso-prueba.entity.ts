@@ -38,6 +38,13 @@ export class EjecucionCasoPrueba {
   @JoinColumn({ name: 'caso_prueba_id' })
   casoPrueba: CasoPrueba;
 
+  @Column({ name: 'bloqueado_por_caso_id', nullable: true })
+  bloqueadoPorCasoId: number;
+
+  @ManyToOne(() => CasoPrueba, { eager: false, nullable: true })
+  @JoinColumn({ name: 'bloqueado_por_caso_id' })
+  bloqueadoPorCaso: CasoPrueba;
+
   @Column({ name: 'proyecto_id' })
   proyectoId: number;
 

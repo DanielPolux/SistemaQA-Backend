@@ -69,6 +69,11 @@ export class CreateEjecucionDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  bloqueadoPorCasoId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   desarrolladorId?: number;
 
   @IsOptional()
