@@ -139,4 +139,54 @@ export class ReportesService {
       })),
     };
   }
+
+  async getReporteCiclo(proyectoId: number, cicloId: number, usuarioId: number, esAdmin: boolean) {
+    const reporteProyecto = await this.getReporteProyecto(proyectoId, usuarioId, esAdmin);
+    const [ciclo] = await this.ds.query(
+      `SELECT id, nombre, estado, ambiente, fecha_inicio, fecha_fin
+       FROM ciclos_prueba WHERE id = $1 AND proyecto_id = $2`,
+      [cicloId, proyectoId],
+    );
+    if (!ciclo) throw new NotFoundException('El ciclo no pertenece al proyecto seleccionado');
+
+    const baseUltima = `WITH ultima AS (
+      SELECT DISTINCT ON (e.caso_prueba_id) e.*
+      FROM ejecuciones_caso_prueba e
+      WHERE e.ciclo_id = $1 AND e.proyecto_id = $2
+      ORDER BY e.caso_prueba_id, e.creado_en DESC
+    )`;
+    const [resumenRows, casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad] = await Promise.all([
+      this.ds.query(`${baseUltima}
+        SELECT COUNT(*)::int AS casos_totales,
+          COUNT(*)::int AS casos_ejecutados,
+          COUNT(*) FILTER (WHERE resultado::text='Aprobado')::int AS casos_aprobados,
+          COUNT(*) FILTER (WHERE resultado::text='Fallido')::int AS casos_fallidos,
+          COUNT(*) FILTER (WHERE resultado::text='Bloqueado')::int AS casos_bloqueados,
+          COUNT(*) FILTER (WHERE resultado::text='Omitido')::int AS casos_omitidos,
+          COUNT(DISTINCT defecto_id) FILTER (WHERE defecto_id IS NOT NULL)::int AS total_defectos,
+          COUNT(DISTINCT d.id) FILTER (WHERE d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS defectos_abiertos,
+          CASE WHEN COUNT(*)=0 THEN 0 ELSE 100 END::int AS porcentaje_avance,
+          CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(COUNT(*) FILTER (WHERE resultado::text='Aprobado')*100.0/COUNT(*)) END::int AS porcentaje_aprobacion
+        FROM ultima u LEFT JOIN defectos d ON d.id=u.defecto_id`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT cp.estado::text AS label, COUNT(*)::int AS valor FROM ultima u JOIN casos_prueba cp ON cp.id=u.caso_prueba_id GROUP BY cp.estado ORDER BY valor DESC`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT resultado::text AS label, COUNT(*)::int AS valor FROM ultima GROUP BY resultado ORDER BY valor DESC`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT d.severidad::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.severidad ORDER BY CASE d.severidad::text WHEN 'Crítico' THEN 1 WHEN 'Alto' THEN 2 WHEN 'Medio' THEN 3 ELSE 4 END`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT d.estado::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.estado ORDER BY valor DESC`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT d.prioridad::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.prioridad ORDER BY CASE d.prioridad::text WHEN 'Urgente' THEN 1 WHEN 'Alta' THEN 2 WHEN 'Media' THEN 3 ELSE 4 END`, [cicloId, proyectoId]),
+    ]);
+    const r = resumenRows[0];
+    return {
+      proyecto: reporteProyecto.proyecto,
+      ciclo,
+      resumen: {
+        casosTotales: Number(r.casos_totales), casosEjecutados: Number(r.casos_ejecutados),
+        casosAprobados: Number(r.casos_aprobados), casosFallidos: Number(r.casos_fallidos),
+        casosBloqueados: Number(r.casos_bloqueados), casosOmitidos: Number(r.casos_omitidos),
+        totalDefectos: Number(r.total_defectos), defectosAbiertos: Number(r.defectos_abiertos),
+        porcentajeAvance: Number(r.porcentaje_avance), porcentajeAprobacion: Number(r.porcentaje_aprobacion),
+      },
+      casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad,
+      avancePorCiclo: [{ ciclo: ciclo.nombre, aprobados: Number(r.casos_aprobados), fallidos: Number(r.casos_fallidos), bloqueados: Number(r.casos_bloqueados), omitidos: Number(r.casos_omitidos), total: Number(r.casos_totales) }],
+    };
+  }
 }

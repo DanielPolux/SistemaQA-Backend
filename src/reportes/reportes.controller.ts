@@ -23,4 +23,14 @@ export class ReportesController {
   ) {
     return this.reportesService.getReporteProyecto(id, user.id, user.rol === Rol.ADMIN);
   }
+
+  @Get('proyecto/:proyectoId/ciclo/:cicloId')
+  @ApiOperation({ summary: 'Reporte de las ejecuciones de un ciclo de prueba' })
+  getReporteCiclo(
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+    @Param('cicloId', ParseIntPipe) cicloId: number,
+    @CurrentUser() user: Usuario,
+  ) {
+    return this.reportesService.getReporteCiclo(proyectoId, cicloId, user.id, user.rol === Rol.ADMIN);
+  }
 }
