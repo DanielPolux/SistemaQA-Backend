@@ -35,38 +35,42 @@ export class ReportesService {
       avancePorCiclo,
     ] = await Promise.all([
       this.ds.query(
-        `SELECT
+        `WITH ultima AS (
+           SELECT DISTINCT ON (caso_prueba_id) caso_prueba_id, resultado
+           FROM ejecuciones_caso_prueba WHERE proyecto_id=$1
+           ORDER BY caso_prueba_id, creado_en DESC
+         ) SELECT
           COUNT(cp.id)::int                                                                            AS casos_totales,
-          COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado')::int                              AS casos_ejecutados,
-          COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado' AND cp.resultado::text = 'Aprobado')::int AS casos_aprobados,
-          COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado' AND cp.resultado::text = 'Fallido')::int  AS casos_fallidos,
+          COUNT(u.caso_prueba_id)::int                                                                 AS casos_ejecutados,
+          COUNT(u.caso_prueba_id) FILTER (WHERE u.resultado::text = 'Aprobado')::int                   AS casos_aprobados,
+          COUNT(u.caso_prueba_id) FILTER (WHERE u.resultado::text = 'Fallido')::int                    AS casos_fallidos,
           (SELECT COUNT(*)::int FROM defectos WHERE proyecto_id = $1)                                  AS total_defectos,
           (SELECT COUNT(*)::int FROM defectos WHERE proyecto_id = $1
              AND estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))                               AS defectos_abiertos,
           CASE WHEN COUNT(cp.id) = 0 THEN 0
-               ELSE ROUND(COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado') * 100.0 / COUNT(cp.id))
+               ELSE ROUND(COUNT(u.caso_prueba_id) * 100.0 / COUNT(cp.id))
           END::int AS porcentaje_avance,
-          CASE WHEN COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado') = 0 THEN 0
+          CASE WHEN COUNT(u.caso_prueba_id) = 0 THEN 0
                ELSE ROUND(
-                 COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado' AND cp.resultado::text = 'Aprobado') * 100.0
-                 / COUNT(cp.id) FILTER (WHERE cp.estado::text = 'Ejecutado')
+                 COUNT(u.caso_prueba_id) FILTER (WHERE u.resultado::text = 'Aprobado') * 100.0
+                 / COUNT(u.caso_prueba_id)
                )
           END::int AS porcentaje_aprobacion
-         FROM casos_prueba cp WHERE cp.proyecto_id = $1`,
+         FROM casos_prueba cp LEFT JOIN ultima u ON u.caso_prueba_id=cp.id WHERE cp.proyecto_id = $1`,
         [id],
       ),
 
       this.ds.query(
-        `SELECT estado::text AS label, COUNT(*)::int AS valor
-         FROM casos_prueba WHERE proyecto_id = $1
-         GROUP BY estado ORDER BY valor DESC`,
+        `SELECT CASE WHEN EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id) THEN 'Ejecutado' ELSE 'Pendiente' END AS label,
+                COUNT(*)::int AS valor
+         FROM casos_prueba cp WHERE proyecto_id = $1
+         GROUP BY label ORDER BY valor DESC`,
         [id],
       ),
 
       this.ds.query(
-        `SELECT resultado::text AS label, COUNT(*)::int AS valor
-         FROM ejecuciones_caso_prueba WHERE proyecto_id = $1
-         GROUP BY resultado ORDER BY valor DESC`,
+        `WITH ultima AS (SELECT DISTINCT ON (caso_prueba_id) resultado FROM ejecuciones_caso_prueba WHERE proyecto_id=$1 ORDER BY caso_prueba_id, creado_en DESC)
+         SELECT resultado::text AS label, COUNT(*)::int AS valor FROM ultima GROUP BY resultado ORDER BY valor DESC`,
         [id],
       ),
 
@@ -149,7 +153,23 @@ export class ReportesService {
     );
     if (!ciclo) throw new NotFoundException('El ciclo no pertenece al proyecto seleccionado');
 
-    const baseUltima = `WITH ultima AS (
+    const baseUltima = `WITH planificados AS (
+      SELECT caso_prueba_id FROM ciclo_casos_planificados WHERE ciclo_id = $1
+    ), plan_casos AS (
+      SELECT DISTINCT cp.id AS caso_prueba_id
+      FROM ciclos_prueba c
+      JOIN plan_requerimientos pr ON pr.plan_id = c.plan_prueba_id
+      JOIN casos_prueba cp ON cp.requerimiento_id = pr.requerimiento_id
+      WHERE c.id = $1 AND c.plan_prueba_id IS NOT NULL
+        AND (NOT EXISTS (SELECT 1 FROM plan_casos_prueba pcp WHERE pcp.plan_id=pr.plan_id AND pcp.requerimiento_id=pr.requerimiento_id)
+          OR EXISTS (SELECT 1 FROM plan_casos_prueba pcp WHERE pcp.plan_id=pr.plan_id AND pcp.caso_prueba_id=cp.id))
+    ), alcance AS (
+      SELECT caso_prueba_id FROM planificados
+      UNION SELECT caso_prueba_id FROM plan_casos WHERE NOT EXISTS (SELECT 1 FROM planificados)
+      UNION SELECT id FROM casos_prueba WHERE proyecto_id=$2
+        AND NOT EXISTS (SELECT 1 FROM planificados) AND NOT EXISTS (SELECT 1 FROM plan_casos)
+      UNION SELECT caso_prueba_id FROM ejecuciones_caso_prueba WHERE ciclo_id=$1 AND proyecto_id=$2
+    ), ultima AS (
       SELECT DISTINCT ON (e.caso_prueba_id) e.*
       FROM ejecuciones_caso_prueba e
       WHERE e.ciclo_id = $1 AND e.proyecto_id = $2
@@ -157,18 +177,22 @@ export class ReportesService {
     )`;
     const [resumenRows, casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad] = await Promise.all([
       this.ds.query(`${baseUltima}
-        SELECT COUNT(*)::int AS casos_totales,
-          COUNT(*)::int AS casos_ejecutados,
-          COUNT(*) FILTER (WHERE resultado::text='Aprobado')::int AS casos_aprobados,
-          COUNT(*) FILTER (WHERE resultado::text='Fallido')::int AS casos_fallidos,
-          COUNT(*) FILTER (WHERE resultado::text='Bloqueado')::int AS casos_bloqueados,
-          COUNT(*) FILTER (WHERE resultado::text='Omitido')::int AS casos_omitidos,
+        SELECT COUNT(a.caso_prueba_id)::int AS casos_totales,
+          COUNT(u.id)::int AS casos_ejecutados,
+          COUNT(u.id) FILTER (WHERE resultado::text='Aprobado')::int AS casos_aprobados,
+          COUNT(u.id) FILTER (WHERE resultado::text='Fallido')::int AS casos_fallidos,
+          COUNT(u.id) FILTER (WHERE resultado::text='Bloqueado')::int AS casos_bloqueados,
+          COUNT(u.id) FILTER (WHERE resultado::text='Omitido')::int AS casos_omitidos,
           COUNT(DISTINCT defecto_id) FILTER (WHERE defecto_id IS NOT NULL)::int AS total_defectos,
           COUNT(DISTINCT d.id) FILTER (WHERE d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS defectos_abiertos,
-          CASE WHEN COUNT(*)=0 THEN 0 ELSE 100 END::int AS porcentaje_avance,
-          CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(COUNT(*) FILTER (WHERE resultado::text='Aprobado')*100.0/COUNT(*)) END::int AS porcentaje_aprobacion
-        FROM ultima u LEFT JOIN defectos d ON d.id=u.defecto_id`, [cicloId, proyectoId]),
-      this.ds.query(`${baseUltima} SELECT cp.estado::text AS label, COUNT(*)::int AS valor FROM ultima u JOIN casos_prueba cp ON cp.id=u.caso_prueba_id GROUP BY cp.estado ORDER BY valor DESC`, [cicloId, proyectoId]),
+          CASE WHEN COUNT(a.caso_prueba_id)=0 THEN 0 ELSE ROUND(COUNT(u.id)*100.0/COUNT(a.caso_prueba_id)) END::int AS porcentaje_avance,
+          CASE WHEN COUNT(u.id)=0 THEN 0 ELSE ROUND(COUNT(u.id) FILTER (WHERE resultado::text='Aprobado')*100.0/COUNT(u.id)) END::int AS porcentaje_aprobacion
+        FROM alcance a LEFT JOIN ultima u ON u.caso_prueba_id=a.caso_prueba_id LEFT JOIN defectos d ON d.id=u.defecto_id`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT label, valor FROM (
+        SELECT 'Ejecutado' AS label, COUNT(u.id)::int AS valor FROM alcance a LEFT JOIN ultima u ON u.caso_prueba_id=a.caso_prueba_id
+        UNION ALL
+        SELECT 'Pendiente' AS label, (COUNT(a.caso_prueba_id)-COUNT(u.id))::int AS valor FROM alcance a LEFT JOIN ultima u ON u.caso_prueba_id=a.caso_prueba_id
+      ) estados WHERE valor > 0 ORDER BY label`, [cicloId, proyectoId]),
       this.ds.query(`${baseUltima} SELECT resultado::text AS label, COUNT(*)::int AS valor FROM ultima GROUP BY resultado ORDER BY valor DESC`, [cicloId, proyectoId]),
       this.ds.query(`${baseUltima} SELECT d.severidad::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.severidad ORDER BY CASE d.severidad::text WHEN 'Crítico' THEN 1 WHEN 'Alto' THEN 2 WHEN 'Medio' THEN 3 ELSE 4 END`, [cicloId, proyectoId]),
       this.ds.query(`${baseUltima} SELECT d.estado::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.estado ORDER BY valor DESC`, [cicloId, proyectoId]),

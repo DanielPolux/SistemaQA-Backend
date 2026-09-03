@@ -86,14 +86,14 @@ export class ProyectosService {
         await this.proyectosRepo.manager.query(
           `SELECT p.id,
             CASE WHEN COUNT(cp.id) = 0 THEN 0
-                 ELSE ROUND(COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END) * 100.0 / COUNT(cp.id))
+                 ELSE ROUND(COUNT(ue.resultado) * 100.0 / COUNT(cp.id))
             END AS avance,
-            CASE WHEN COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END) = 0 THEN 0
-                 ELSE ROUND(COUNT(CASE WHEN cp.estado = 'Ejecutado' AND cp.resultado = 'Aprobado' THEN 1 END) * 100.0
-                       / COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END))
+            CASE WHEN COUNT(ue.resultado) = 0 THEN 0
+                 ELSE ROUND(COUNT(CASE WHEN ue.resultado::text = 'Aprobado' THEN 1 END) * 100.0 / COUNT(ue.resultado))
             END AS aprobacion
            FROM proyectos p
            LEFT JOIN casos_prueba cp ON cp.proyecto_id = p.id
+           LEFT JOIN LATERAL (SELECT e.resultado FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id ORDER BY e.creado_en DESC LIMIT 1) ue ON true
            WHERE p.id = ANY($1::int[])
            GROUP BY p.id`,
           [ids],
@@ -138,13 +138,14 @@ export class ProyectosService {
       await this.proyectosRepo.manager.query(
         `SELECT
           CASE WHEN COUNT(cp.id) = 0 THEN 0
-               ELSE ROUND(COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END) * 100.0 / COUNT(cp.id))
+               ELSE ROUND(COUNT(ue.resultado) * 100.0 / COUNT(cp.id))
           END AS avance,
-          CASE WHEN COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END) = 0 THEN 0
-               ELSE ROUND(COUNT(CASE WHEN cp.estado = 'Ejecutado' AND cp.resultado = 'Aprobado' THEN 1 END) * 100.0
-                     / COUNT(CASE WHEN cp.estado = 'Ejecutado' THEN 1 END))
+          CASE WHEN COUNT(ue.resultado) = 0 THEN 0
+               ELSE ROUND(COUNT(CASE WHEN ue.resultado::text = 'Aprobado' THEN 1 END) * 100.0 / COUNT(ue.resultado))
           END AS aprobacion
-         FROM casos_prueba cp WHERE cp.proyecto_id = $1`,
+         FROM casos_prueba cp
+         LEFT JOIN LATERAL (SELECT e.resultado FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id ORDER BY e.creado_en DESC LIMIT 1) ue ON true
+         WHERE cp.proyecto_id = $1`,
         [id],
       );
 

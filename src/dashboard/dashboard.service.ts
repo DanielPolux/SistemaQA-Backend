@@ -72,7 +72,7 @@ export class DashboardService {
       SELECT
         (SELECT COUNT(*) FROM proyectos WHERE ${proyectoFilter})::int AS proyectos_activos,
         (SELECT COUNT(*) FROM casos_prueba cp WHERE ${casosFilter})::int AS casos_totales,
-        (SELECT COUNT(*) FROM casos_prueba cp WHERE ${casosFilter} AND cp.estado::text = 'Ejecutado')::int AS casos_ejecutados,
+        (SELECT COUNT(*) FROM casos_prueba cp WHERE ${casosFilter} AND EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id))::int AS casos_ejecutados,
         (SELECT COUNT(*) FROM defectos df WHERE ${defectosFilter} AND df.estado::text NOT IN ('Cerrado','Resuelto','Rechazado'))::int AS defectos_abiertos,
         (SELECT COALESCE(ROUND(AVG(porcentaje_avance)), 0) FROM proyectos WHERE ${proyectoFilter})::int AS avance_promedio,
         (SELECT COUNT(*) FROM casos_prueba WHERE responsable_qa_id = $1)::int AS mis_casos,
@@ -86,10 +86,10 @@ export class DashboardService {
   private async getCasosPorEstado(usuarioId: number, esAdmin: boolean) {
     const where = esAdmin ? '' : `WHERE ${this.userProjectsIn(esAdmin, 'cp')}`;
     return this.ds.query(`
-      SELECT estado::text AS estado, COUNT(*)::int AS total
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id) THEN 'Ejecutado' ELSE 'Pendiente' END AS estado, COUNT(*)::int AS total
       FROM casos_prueba cp
       ${where}
-      GROUP BY estado
+      GROUP BY 1
       ORDER BY total DESC
     `, esAdmin ? [] : [usuarioId]);
   }
@@ -138,9 +138,11 @@ export class DashboardService {
         p.codigo,
         p.nombre,
         p.estado::text AS estado,
-        p.porcentaje_avance,
+        CASE WHEN (SELECT COUNT(*) FROM casos_prueba cp WHERE cp.proyecto_id=p.id)=0 THEN 0 ELSE ROUND(
+          (SELECT COUNT(*) FROM casos_prueba cp WHERE cp.proyecto_id=p.id AND EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id))*100.0 /
+          (SELECT COUNT(*) FROM casos_prueba cp WHERE cp.proyecto_id=p.id)) END AS porcentaje_avance,
         (SELECT COUNT(*)::int FROM casos_prueba cp WHERE cp.proyecto_id = p.id)                                                          AS casos_totales,
-        (SELECT COUNT(*)::int FROM casos_prueba cp WHERE cp.proyecto_id = p.id AND cp.estado::text = 'Ejecutado')                        AS casos_ejecutados,
+        (SELECT COUNT(*)::int FROM casos_prueba cp WHERE cp.proyecto_id = p.id AND EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id)) AS casos_ejecutados,
         (SELECT COUNT(*)::int FROM defectos d     WHERE d.proyecto_id  = p.id AND d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado')) AS defectos_abiertos
       FROM proyectos p
       WHERE p.estado::text IN ('Planificado','En Ejecución')
@@ -152,10 +154,10 @@ export class DashboardService {
 
   private async getMisCasos(usuarioId: number) {
     return this.ds.query(`
-      SELECT estado::text AS estado, COUNT(*)::int AS total
-      FROM casos_prueba
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id) THEN 'Ejecutado' ELSE 'Pendiente' END AS estado, COUNT(*)::int AS total
+      FROM casos_prueba cp
       WHERE responsable_qa_id = $1
-      GROUP BY estado
+      GROUP BY 1
       ORDER BY total DESC
     `, [usuarioId]);
   }
