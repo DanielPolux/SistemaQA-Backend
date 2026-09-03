@@ -219,7 +219,7 @@ export class EjecucionesService {
 
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre'])
+      .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre', 'cp.descripcion'])
       .leftJoin('e.bloqueadoPorCaso', 'bcp').addSelect(['bcp.codigo', 'bcp.nombre'])
       .leftJoin('e.proyecto',      'p' ).addSelect(['p.nombre',  'p.codigo'])
       .leftJoin('e.tester',        't' ).addSelect(['t.nombre',  't.apellido'])
@@ -259,7 +259,7 @@ export class EjecucionesService {
   async findByCasoPrueba(casoPruebaId: number, cicloId?: number): Promise<any[]> {
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre'])
+      .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre', 'cp.descripcion'])
       .leftJoin('e.bloqueadoPorCaso', 'bcp').addSelect(['bcp.codigo', 'bcp.nombre'])
       .leftJoin('e.proyecto',      'p' ).addSelect(['p.nombre',  'p.codigo'])
       .leftJoin('e.tester',        't' ).addSelect(['t.nombre',  't.apellido'])
@@ -279,6 +279,7 @@ export class EjecucionesService {
       ...e,
       casoPruebaCodigo:    e.casoPrueba?.codigo ?? null,
       casoPruebaNombre:    e.casoPrueba?.nombre ?? null,
+      casoPruebaDescripcion: e.casoPrueba?.descripcion ?? null,
       bloqueadoPorCasoCodigo: e.bloqueadoPorCaso?.codigo ?? null,
       bloqueadoPorCasoNombre: e.bloqueadoPorCaso?.nombre ?? null,
       proyectoNombre:      e.proyecto?.nombre   ?? null,
