@@ -45,7 +45,7 @@ export class DefectosService {
 
     const qb = this.defectosRepo
       .createQueryBuilder('d')
-      .leftJoin('d.proyecto', 'p').addSelect(['p.nombre'])
+      .leftJoin('d.proyecto', 'p').addSelect(['p.nombre', 'p.codigo'])
       .leftJoin('d.casoPrueba', 'cp').addSelect(['cp.codigo'])
       .leftJoin('d.asignado', 'a').addSelect(['a.nombre', 'a.apellido'])
       .leftJoin('d.reportador', 'r').addSelect(['r.nombre', 'r.apellido'])
@@ -73,6 +73,7 @@ export class DefectosService {
     const datos = defectos.map((d) => ({
       ...d,
       proyectoNombre: d.proyecto?.nombre ?? null,
+      proyectoCodigo: d.proyecto?.codigo ?? null,
       casoPruebaCodigo: d.casoPrueba?.codigo ?? null,
       asignadoANombre: d.asignado ? `${d.asignado.nombre} ${d.asignado.apellido}` : null,
       reportadoPorNombre: d.reportador ? `${d.reportador.nombre} ${d.reportador.apellido}` : null,
@@ -88,7 +89,7 @@ export class DefectosService {
   async findOne(id: number): Promise<any> {
     const d = await this.defectosRepo.findOne({
       where: { id },
-      relations: ['proyecto', 'casoPrueba', 'asignado', 'reportador', 'comentarios', 'comentarios.usuario'],
+      relations: ['proyecto', 'requerimiento', 'casoPrueba', 'casoPrueba.requerimiento', 'asignado', 'reportador', 'comentarios', 'comentarios.usuario'],
     });
     if (!d) throw new NotFoundException(`Defecto #${id} no encontrado`);
 
@@ -106,13 +107,17 @@ export class DefectosService {
     return {
       ...d,
       proyectoNombre: d.proyecto?.nombre ?? null,
+      proyectoCodigo: d.proyecto?.codigo ?? null,
       casoPruebaCodigo: d.casoPrueba?.codigo ?? null,
+      requerimientoCodigo: d.requerimiento?.codigo ?? d.casoPrueba?.requerimiento?.codigo ?? null,
+      requerimientoTitulo: d.requerimiento?.titulo ?? d.casoPrueba?.requerimiento?.titulo ?? null,
       asignadoANombre: d.asignado ? `${d.asignado.nombre} ${d.asignado.apellido}` : null,
       reportadoPorNombre: d.reportador ? `${d.reportador.nombre} ${d.reportador.apellido}` : null,
       comentarios,
       evidencias,
       proyecto: undefined,
       casoPrueba: undefined,
+      requerimiento: undefined,
       asignado: undefined,
       reportador: undefined,
     };
@@ -384,19 +389,35 @@ export class DefectosService {
       this.usuariosRepo.findOne({ where: { id: defecto.reportadoPor } }),
       this.proyectosRepo.findOne({ where: { id: defecto.proyectoId }, relations: ['jefeProyecto'] }),
       // codigo_cp es el nombre real de la columna en BD (la entidad la mapea a "codigo" en TS)
-      this.defectosRepo.manager.query('SELECT codigo_cp FROM casos_prueba WHERE id = $1', [defecto.casoPruebaId]),
+      this.defectosRepo.manager.query(
+        `SELECT cp.codigo_cp, r.codigo AS requerimiento_codigo, r.titulo AS requerimiento_titulo
+         FROM casos_prueba cp LEFT JOIN requerimientos r ON r.id = COALESCE($2, cp.requerimiento_id)
+         WHERE cp.id = $1`,
+        [defecto.casoPruebaId, defecto.requerimientoId],
+      ),
     ]);
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200');
     const linkDefecto  = `${frontendUrl}/defectos/${defecto.id}`;
 
     const wordBuffer = await this.defectoWordService.generar(
-      { ...defecto, proyectoNombre: proyecto?.nombre ?? null, casoPruebaCodigo: casoPrueba?.[0]?.codigo_cp ?? null } as any,
+      {
+        ...defecto,
+        proyectoNombre: proyecto?.nombre ?? null,
+        proyectoCodigo: proyecto?.codigo ?? null,
+        casoPruebaCodigo: casoPrueba?.[0]?.codigo_cp ?? null,
+        requerimientoCodigo: casoPrueba?.[0]?.requerimiento_codigo ?? null,
+        requerimientoTitulo: casoPrueba?.[0]?.requerimiento_titulo ?? null,
+      } as any,
       evidencias,
       observacionesTester,
     );
     const attachments: MailAttachment[] | undefined = wordBuffer
-      ? [{ filename: `${defecto.codigoProyecto ?? defecto.codigo}-reporte.docx`, content: wordBuffer }]
+      ? [{
+          filename: `${[proyecto?.codigo, defecto.codigoProyecto ?? defecto.codigo]
+            .filter(Boolean).join('-').replace(/[^a-zA-Z0-9_-]+/g, '-')}-reporte.docx`,
+          content: wordBuffer,
+        }]
       : undefined;
 
     if (!defecto.asignadoA) {

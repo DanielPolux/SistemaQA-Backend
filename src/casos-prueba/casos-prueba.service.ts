@@ -247,6 +247,7 @@ export class CasosPruebaService {
       ...c,
       proyectoNombre:      c.proyecto      ? c.proyecto.nombre                                      : null,
       requerimientoCodigo: c.requerimiento ? c.requerimiento.codigo                                 : null,
+      requerimientoTitulo: c.requerimiento ? c.requerimiento.titulo                                 : null,
       responsableQaNombre: c.responsableQa ? `${c.responsableQa.nombre} ${c.responsableQa.apellido}`: null,
       creadoPorNombre:     c.creador       ? `${c.creador.nombre} ${c.creador.apellido}`            : null,
       proyecto:      undefined,

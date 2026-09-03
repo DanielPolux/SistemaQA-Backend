@@ -35,7 +35,7 @@ export class DefectoWordService {
   private readonly logger = new Logger(DefectoWordService.name);
 
   async generar(
-    defecto: Defecto & { proyectoNombre?: string | null; casoPruebaCodigo?: string | null },
+    defecto: Defecto & { proyectoNombre?: string | null; proyectoCodigo?: string | null; casoPruebaCodigo?: string | null; requerimientoCodigo?: string | null; requerimientoTitulo?: string | null },
     evidencias: EvidenciaArchivo[],
     observacionesTester?: string | null,
   ): Promise<Buffer | null> {
@@ -61,7 +61,8 @@ export class DefectoWordService {
             this.sectionTitle('IDENTIFICACIÓN'),
             this.infoTable([
               ['Código',          defecto.codigoProyecto ?? defecto.codigo ?? '—'],
-              ['Proyecto',        defecto.proyectoNombre ?? '—'],
+              ['Proyecto',        [defecto.proyectoCodigo, defecto.proyectoNombre].filter(Boolean).join(' - ') || '—'],
+              ['Requerimiento',   [defecto.requerimientoCodigo, defecto.requerimientoTitulo].filter(Boolean).join(' - ') || '—'],
               ['Caso de Prueba',  defecto.casoPruebaCodigo ?? '—'],
               ['Fecha Reporte',   fecha],
             ]),
@@ -78,7 +79,11 @@ export class DefectoWordService {
             this.sectionTitle('TÍTULO'),
             new Paragraph({
               spacing: { after: 280 },
-              children: [new TextRun({ text: defecto.titulo, size: 24, bold: true })],
+              children: [new TextRun({
+                text: [defecto.proyectoCodigo, defecto.titulo].filter(Boolean).join(' - '),
+                size: 24,
+                bold: true,
+              })],
             }),
 
             this.sectionTitle('DESCRIPCIÓN'),
@@ -182,14 +187,14 @@ export class DefectoWordService {
         new TableRow({
           children: [
             new TableCell({
-              width: { size: 28, type: WidthType.PERCENTAGE },
+              width: { size: 18, type: WidthType.PERCENTAGE },
               verticalAlign: VerticalAlign.CENTER,
               shading: { fill: 'EEF2F7' },
               margins: { top: 80, bottom: 80, left: 120, right: 120 },
               children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 20, color: '374151' })] })],
             }),
             new TableCell({
-              width: { size: 72, type: WidthType.PERCENTAGE },
+              width: { size: 82, type: WidthType.PERCENTAGE },
               verticalAlign: VerticalAlign.CENTER,
               margins: { top: 80, bottom: 80, left: 120, right: 120 },
               children: [new Paragraph({ children: [new TextRun({ text: value, size: 20 })] })],

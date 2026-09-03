@@ -125,6 +125,8 @@ export class CiclosPruebaService {
          cp.resultado_esperado AS "resultadoEsperado",
          cp.proyecto_id        AS "proyectoId",
          cp.requerimiento_id   AS "requerimientoId",
+         r.codigo              AS "requerimientoCodigo",
+         r.titulo              AS "requerimientoTitulo",
          r.estado              AS "requerimientoEstado",
          ue.resultado          AS "resultadoCiclo",
          ue.version            AS "ultimaVersion",
