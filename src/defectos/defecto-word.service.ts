@@ -181,7 +181,7 @@ export class DefectoWordService {
 
   private infoTable(rows: [string, string][]): Table {
     const tableWidth = 9000;
-    const labelWidth = 1620;
+    const labelWidth = 2250;
     const detailWidth = tableWidth - labelWidth;
     return new Table({
       width: { size: tableWidth, type: WidthType.DXA },
