@@ -288,6 +288,14 @@ export class CiclosPruebaService {
 
   async cerrar(id: number): Promise<CicloPrueba> {
     const ciclo = await this.findOne(id);
+    const casos = await this.getCasosDeCiclo(id);
+    if (!casos.length) {
+      throw new BadRequestException('No se puede finalizar un ciclo sin casos de prueba.');
+    }
+    const pendientes = casos.filter(c => !c.resultadoCiclo).length;
+    if (pendientes > 0) {
+      throw new BadRequestException(`No se puede finalizar el ciclo: quedan ${pendientes} caso(s) pendientes.`);
+    }
     ciclo.estado = EstadoCiclo.CERRADO;
     if (!ciclo.fechaFin) ciclo.fechaFin = new Date() as any;
     return this.repo.save(ciclo);
