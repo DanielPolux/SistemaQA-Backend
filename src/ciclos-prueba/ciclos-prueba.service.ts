@@ -83,10 +83,10 @@ export class CiclosPruebaService {
   }
 
   async findActivoByProyecto(proyectoId: number): Promise<CicloPrueba | null> {
-    return this.repo.findOne({
-      where: { proyectoId, estado: EstadoCiclo.ACTIVO },
-      order: { creadoEn: 'DESC' },
-    });
+    return this.repo.createQueryBuilder('c')
+      .where('c.proyectoId = :proyectoId', { proyectoId })
+      .andWhere('c.estado != :cerrado', { cerrado: EstadoCiclo.CERRADO })
+      .orderBy('c.creadoEn', 'DESC').getOne();
   }
 
   async getCasosDeCiclo(cicloId: number): Promise<any[]> {
@@ -201,6 +201,7 @@ export class CiclosPruebaService {
   }
 
   async create(dto: CreateCicloPruebaDto, creadoPor: number): Promise<CicloPrueba> {
+    this.validarRangoFechas(dto.fechaInicio, dto.fechaFin);
     const [proyecto] = await this.repo.manager.query(
       `SELECT estado FROM proyectos WHERE id = $1`,
       [dto.proyectoId],
@@ -251,9 +252,10 @@ export class CiclosPruebaService {
       );
     }
 
-    const cicloActivo = await this.repo.findOne({
-      where: { proyectoId: dto.proyectoId, estado: EstadoCiclo.ACTIVO },
-    });
+    const cicloActivo = await this.repo.createQueryBuilder('c')
+      .where('c.proyectoId = :proyectoId', { proyectoId: dto.proyectoId })
+      .andWhere('c.estado != :cerrado', { cerrado: EstadoCiclo.CERRADO })
+      .getOne();
     if (cicloActivo) {
       throw new BadRequestException(
         `El proyecto ya tiene un ciclo activo: "${cicloActivo.nombre}". ` +
@@ -276,7 +278,7 @@ export class CiclosPruebaService {
       planPruebaId: dto.planPruebaId ?? null,
       planNombre,
       creadoPor,
-      estado: EstadoCiclo.ACTIVO,
+      estado: EstadoCiclo.PLANIFICADO,
     });
     const saved = await this.repo.save(ciclo);
     void this.enviarAsignacionResponsable(saved, false).catch(() => undefined);
@@ -310,12 +312,26 @@ export class CiclosPruebaService {
   async update(id: number, dto: Partial<CreateCicloPruebaDto>): Promise<CicloPrueba> {
     const ciclo = await this.findOne(id);
     const responsableAnterior = ciclo.responsableQaId;
+    const fechaInicioAnterior = ciclo.fechaInicio ? String(ciclo.fechaInicio) : null;
+    this.validarRangoFechas(
+      dto.fechaInicio ?? ciclo.fechaInicio,
+      dto.fechaFin ?? ciclo.fechaFin,
+    );
     Object.assign(ciclo, dto);
+    if (dto.fechaInicio !== undefined && dto.fechaInicio !== fechaInicioAnterior) {
+      ciclo.recordatorioInicioEnviadoEn = null;
+    }
     const saved = await this.repo.save(ciclo);
     if (dto.responsableQaId && dto.responsableQaId !== responsableAnterior) {
       void this.enviarAsignacionResponsable(saved, true).catch(() => undefined);
     }
     return saved;
+  }
+
+  private validarRangoFechas(fechaInicio?: string | Date | null, fechaFin?: string | Date | null): void {
+    if (fechaInicio && fechaFin && new Date(fechaFin).getTime() < new Date(fechaInicio).getTime()) {
+      throw new BadRequestException('La fecha de fin estimada no puede ser anterior a la fecha de inicio planificada.');
+    }
   }
 
   private async enviarAsignacionResponsable(ciclo: CicloPrueba, esReasignacion: boolean): Promise<void> {
@@ -379,6 +395,50 @@ export class CiclosPruebaService {
     });
   }
 
+  async iniciar(id: number, usuarioId: number, usuarioNombre: string): Promise<CicloPrueba> {
+    const ciclo = await this.findOne(id);
+    if (ciclo.estado !== EstadoCiclo.PLANIFICADO) {
+      throw new BadRequestException(`Solo se puede iniciar un ciclo Planificado. Estado actual: "${ciclo.estado}".`);
+    }
+    if (!ciclo.responsableQaId) {
+      throw new BadRequestException('Asigna un Responsable QA antes de iniciar el ciclo.');
+    }
+    ciclo.estado = EstadoCiclo.EN_EJECUCION;
+    ciclo.fechaInicioReal = new Date();
+    const saved = await this.repo.save(ciclo);
+    await this.auditoriaService.registrar({ entidad: 'CicloPrueba', entidadId: id, usuarioId, usuarioNombre, accion: 'Iniciado', valorNuevo: ciclo.fechaInicioReal.toISOString() });
+    void this.enviarCorreoInicio(saved).catch(() => undefined);
+    return saved;
+  }
+
+  private async enviarCorreoInicio(ciclo: CicloPrueba): Promise<void> {
+    const [datos] = await this.repo.manager.query(
+      `SELECT rqa.email, rqa.nombre, rqa.apellido, jq.email AS jefe_qa_email,
+              jp.email AS jefe_proyecto_email, p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre
+       FROM ciclos_prueba c
+       JOIN proyectos p ON p.id=c.proyecto_id
+       JOIN usuarios rqa ON rqa.id=c.responsable_qa_id
+       LEFT JOIN usuarios jq ON jq.id=p.jefe_qa_id
+       LEFT JOIN usuarios jp ON jp.id=p.jefe_proyecto_id
+       WHERE c.id=$1`, [ciclo.id],
+    );
+    if (!datos?.email) return;
+    const url = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200').replace(/\/$/, '');
+    const link = `${url}/ciclos/${ciclo.id}/ejecutar`;
+    const cc = [...new Set([datos.jefe_qa_email, datos.jefe_proyecto_email].filter((e: string) => e && e !== datos.email))];
+    await this.mailService.send({
+      to: datos.email, cc: cc.length ? cc : undefined,
+      subject: `[Inicio de ciclo de pruebas] ${datos.proyecto_codigo} - ${ciclo.nombre}`,
+      html: this.plantillaCorreoCiclo('Inicio real del ciclo de pruebas', datos, ciclo, link,
+        'Se confirma el inicio efectivo del ciclo. A partir de este momento pueden registrarse las ejecuciones, evidencias y defectos correspondientes.'),
+    });
+  }
+
+  private plantillaCorreoCiclo(titulo: string, datos: any, ciclo: CicloPrueba, link: string, mensaje: string): string {
+    const color = '#2D4F72';
+    return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1f2937"><div style="background:${color};padding:22px 24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0;font-size:21px">${titulo}</h2></div><div style="background:#f8fafc;padding:26px 24px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px"><p>Estimado/a <strong>${datos.nombre} ${datos.apellido}</strong>:</p><p>${mensaje}</p><table style="width:100%;border-collapse:collapse;margin:18px 0"><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600;width:32%">Proyecto</td><td style="padding:9px;border:1px solid #d9e0e7">${datos.proyecto_codigo} - ${datos.proyecto_nombre}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ciclo</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.nombre}</td></tr><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ambiente</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.ambiente ?? '—'}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Inicio real</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.fechaInicioReal ? new Date(ciclo.fechaInicioReal).toLocaleString('es-PE', { timeZone: 'America/Lima' }) : '—'}</td></tr></table><div style="margin:26px 0;text-align:center"><a href="${link}" style="background:${color};color:#fff;padding:12px 26px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Acceder al ciclo de pruebas</a></div><p style="font-size:13px;color:#64748b">Enlace: <a href="${link}" style="color:${color};word-break:break-all">${link}</a></p><p>Atentamente,<br><strong>Equipo de Aseguramiento de Calidad</strong></p><hr style="border:none;border-top:1px solid #d9e0e7"><p style="color:#6b7280;font-size:12px">Sistema QA — Notificación automática. Por favor, no responda este mensaje.</p></div></div>`;
+  }
+
   async cerrar(id: number, dto: CerrarCicloDto, usuarioId: number, usuarioNombre: string): Promise<any> {
     const ciclo = await this.findOne(id);
     const casos = await this.getCasosDeCiclo(id);
@@ -417,7 +477,7 @@ export class CiclosPruebaService {
       resumen, generadoPor: usuarioId,
     }));
     ciclo.estado = EstadoCiclo.CERRADO;
-    if (!ciclo.fechaFin) ciclo.fechaFin = new Date() as any;
+    ciclo.fechaFinReal = new Date();
     const saved = await this.repo.save(ciclo);
     await this.auditoriaService.registrar({ entidad: 'CicloPrueba', entidadId: id, usuarioId, usuarioNombre, accion: 'Cerrado', valorNuevo: `${resultadoGlobal} | ${dto.recomendacionQa} | Informe E${String(informe.version).padStart(2, '0')}` });
     await this.enviarInformeCierre(saved, informe).catch(() => undefined);
@@ -498,7 +558,8 @@ export class CiclosPruebaService {
 
   async reabrir(id: number): Promise<CicloPrueba> {
     const ciclo = await this.findOne(id);
-    ciclo.estado = EstadoCiclo.ACTIVO;
+    ciclo.estado = EstadoCiclo.EN_EJECUCION;
+    ciclo.fechaFinReal = null;
     const saved = await this.repo.save(ciclo);
 
     // Auto-advance linked plan state to 'En ejecución'

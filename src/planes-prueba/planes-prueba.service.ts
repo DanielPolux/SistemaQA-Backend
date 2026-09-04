@@ -396,7 +396,7 @@ export class PlanesPruebaService {
     const [{ activeCiclos }] = await this.repo.manager.query(
       `SELECT COUNT(*)::int AS "activeCiclos"
        FROM ciclos_prueba
-       WHERE plan_prueba_id = $1 AND estado = 'Activo'`,
+       WHERE plan_prueba_id = $1 AND estado != 'Cerrado'`,
       [planId],
     );
     if (activeCiclos > 0) return EstadoPlan.EN_EJECUCION;

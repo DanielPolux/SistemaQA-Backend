@@ -91,6 +91,14 @@ export class CiclosPruebaController {
     return this.service.cerrar(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
+  @Patch(':id/iniciar')
+  @UseGuards(RolesGuard)
+  @Roles(...ROLES_GESTION)
+  @ApiOperation({ summary: 'Registrar el inicio real del ciclo de prueba' })
+  iniciar(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.iniciar(+id, user.id, `${user.nombre} ${user.apellido}`);
+  }
+
   @Patch(':id/reabrir')
   @UseGuards(RolesGuard)
   @Roles(...ROLES_GESTION)

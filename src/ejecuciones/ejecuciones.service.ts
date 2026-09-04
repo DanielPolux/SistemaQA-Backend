@@ -72,7 +72,7 @@ export class EjecucionesService {
         )
       : await this.dataSource.manager.query(
           `SELECT id, nombre, plan_prueba_id FROM ciclos_prueba
-           WHERE proyecto_id = $1 AND estado = 'Activo'
+           WHERE proyecto_id = $1 AND estado = 'En ejecución'
            ORDER BY creado_en DESC LIMIT 1`,
           [proyectoId],
         );
@@ -144,7 +144,7 @@ export class EjecucionesService {
       let cicloId = ejecucionFields.cicloId ?? undefined;
       if (!cicloId && ejecucionFields.proyectoId) {
         const cicloActivo = await em.findOne(CicloPrueba, {
-          where: { proyectoId: ejecucionFields.proyectoId, estado: EstadoCiclo.ACTIVO },
+          where: { proyectoId: ejecucionFields.proyectoId, estado: EstadoCiclo.EN_EJECUCION },
           order: { creadoEn: 'DESC' },
         });
         if (cicloActivo) cicloId = cicloActivo.id;
@@ -203,7 +203,7 @@ export class EjecucionesService {
     let cicloId = fields.cicloId ?? undefined;
     if (!cicloId && fields.proyectoId) {
       const cicloActivo = await this.ciclosRepo.findOne({
-        where: { proyectoId: fields.proyectoId, estado: EstadoCiclo.ACTIVO },
+        where: { proyectoId: fields.proyectoId, estado: EstadoCiclo.EN_EJECUCION },
         order: { creadoEn: 'DESC' },
       });
       if (cicloActivo) cicloId = cicloActivo.id;

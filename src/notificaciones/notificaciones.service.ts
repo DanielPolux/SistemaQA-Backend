@@ -15,6 +15,41 @@ export class NotificacionesService {
     private config: ConfigService,
   ) {}
 
+  // Todos los días a las 08:00 (hora de Lima). Solo se envía una vez por ciclo.
+  @Cron('0 8 * * *', { name: 'recordatorio-inicio-ciclos', timeZone: 'America/Lima' })
+  async enviarRecordatoriosInicioCiclo(): Promise<void> {
+    const ciclos: any[] = await this.ds.query(
+      `SELECT c.id, c.nombre, c.ambiente, c.fecha_inicio, c.fecha_fin,
+              p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre,
+              rqa.email, rqa.nombre AS responsable_nombre, rqa.apellido AS responsable_apellido,
+              jq.email AS jefe_qa_email
+       FROM ciclos_prueba c
+       JOIN proyectos p ON p.id=c.proyecto_id
+       JOIN usuarios rqa ON rqa.id=c.responsable_qa_id
+       LEFT JOIN usuarios jq ON jq.id=p.jefe_qa_id
+       WHERE c.estado='Planificado'
+         AND c.recordatorio_inicio_enviado_en IS NULL
+         AND c.fecha_inicio = ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Lima')::date + 1)`,
+    );
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200').replace(/\/$/, '');
+    for (const c of ciclos) {
+      const link = `${frontendUrl}/ciclos`;
+      await this.mailService.send({
+        to: c.email,
+        cc: c.jefe_qa_email && c.jefe_qa_email !== c.email ? [c.jefe_qa_email] : undefined,
+        subject: `[Recordatorio de inicio planificado] ${c.proyecto_codigo} - ${c.nombre}`,
+        html: this.plantillaRecordatorioCiclo(c, link),
+      });
+      await this.ds.query(`UPDATE ciclos_prueba SET recordatorio_inicio_enviado_en=NOW() WHERE id=$1`, [c.id]);
+      this.logger.log(`Recordatorio de ciclo #${c.id} → ${c.email}`);
+    }
+  }
+
+  private plantillaRecordatorioCiclo(c: any, link: string): string {
+    const color = '#2D4F72';
+    return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1f2937"><div style="background:${color};padding:22px 24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0;font-size:21px">Recordatorio de inicio planificado</h2></div><div style="background:#f8fafc;padding:26px 24px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px"><p>Estimado/a <strong>${c.responsable_nombre} ${c.responsable_apellido}</strong>:</p><p>El siguiente ciclo está programado para iniciar mañana. Esta notificación es un <strong>recordatorio de planificación</strong> y no confirma el inicio efectivo de las pruebas.</p><table style="width:100%;border-collapse:collapse;margin:18px 0"><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600;width:32%">Proyecto</td><td style="padding:9px;border:1px solid #d9e0e7">${c.proyecto_codigo} - ${c.proyecto_nombre}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ciclo</td><td style="padding:9px;border:1px solid #d9e0e7">${c.nombre}</td></tr><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Inicio planificado</td><td style="padding:9px;border:1px solid #d9e0e7">${c.fecha_inicio}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ambiente</td><td style="padding:9px;border:1px solid #d9e0e7">${c.ambiente ?? '—'}</td></tr></table><div style="background:#eaf0f6;border-left:4px solid ${color};padding:14px 16px;margin:18px 0"><strong>Antes de iniciar:</strong> verifique la disponibilidad del ambiente, datos de prueba, accesos y alcance del ciclo.</div><div style="margin:26px 0;text-align:center"><a href="${link}" style="background:${color};color:#fff;padding:12px 26px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Revisar ciclo de pruebas</a></div><p>Atentamente,<br><strong>Equipo de Aseguramiento de Calidad</strong></p><hr style="border:none;border-top:1px solid #d9e0e7"><p style="color:#6b7280;font-size:12px">Sistema QA — Notificación automática. Por favor, no responda este mensaje.</p></div></div>`;
+  }
+
   // Lunes a viernes a las 18:00 (hora del servidor).
   // Ajusta el cron si el contenedor corre en UTC: p.ej. '0 23 * * 1-5' para Lima (UTC-5).
   @Cron('0 18 * * 1-5', { name: 'reporte-diario-pm' })

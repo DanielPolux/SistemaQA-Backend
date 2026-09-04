@@ -6,8 +6,9 @@ import { Proyecto } from '../../proyectos/entities/proyecto.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
 export enum EstadoCiclo {
-  ACTIVO  = 'Activo',
-  CERRADO = 'Cerrado',
+  PLANIFICADO  = 'Planificado',
+  EN_EJECUCION = 'En ejecución',
+  CERRADO      = 'Cerrado',
 }
 
 @Entity('ciclos_prueba')
@@ -31,7 +32,7 @@ export class CicloPrueba {
   @Column({ length: 50, nullable: true })
   ambiente: string;
 
-  @Column({ length: 20, default: EstadoCiclo.ACTIVO })
+  @Column({ length: 20, default: EstadoCiclo.PLANIFICADO })
   estado: EstadoCiclo;
 
   @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
@@ -39,6 +40,15 @@ export class CicloPrueba {
 
   @Column({ name: 'fecha_fin', type: 'date', nullable: true })
   fechaFin: Date;
+
+  @Column({ name: 'fecha_inicio_real', type: 'timestamptz', nullable: true })
+  fechaInicioReal: Date | null;
+
+  @Column({ name: 'fecha_fin_real', type: 'timestamptz', nullable: true })
+  fechaFinReal: Date | null;
+
+  @Column({ name: 'recordatorio_inicio_enviado_en', type: 'timestamptz', nullable: true })
+  recordatorioInicioEnviadoEn: Date | null;
 
   @Column({ name: 'creado_por' })
   creadoPor: number;
