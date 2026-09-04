@@ -6,6 +6,7 @@ import { ProyectosService } from './proyectos.service';
 import { Proyecto, EstadoProyecto } from './entities/proyecto.entity';
 import { SharepointService } from '../sharepoint/sharepoint.service';
 import { MailService } from '../mail/mail.service';
+import { CatalogosService } from '../catalogos/catalogos.service';
 
 const mockProyecto = {
   id: 1,
@@ -46,6 +47,7 @@ describe('ProyectosService', () => {
       providers: [
         ProyectosService,
         { provide: getRepositoryToken(Proyecto), useValue: mockRepo },
+        { provide: CatalogosService, useValue: { validarClienteActivo: jest.fn().mockResolvedValue(undefined) } },
         { provide: SharepointService, useValue: { subirArchivo: jest.fn(), eliminarArchivo: jest.fn() } },
         { provide: MailService,       useValue: { send: jest.fn() } },
         { provide: ConfigService,     useValue: { get: jest.fn().mockReturnValue('http://localhost:4200') } },

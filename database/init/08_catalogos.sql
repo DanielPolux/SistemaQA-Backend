@@ -18,6 +18,9 @@ CREATE INDEX IF NOT EXISTS idx_catalogos_grupo ON catalogos (grupo);
 -- ─── Seed: valores del sistema ─────────────────────────────────────────────
 INSERT INTO catalogos (grupo, codigo, nombre, descripcion, orden, sistema) VALUES
 
+-- Clientes se administran desde la aplicación. Los clientes de proyectos existentes
+-- se incorporan automáticamente al consultar este grupo por primera vez.
+
 -- Estado de Defecto
 ('ESTADO_DEFECTO', 'Nuevo',        'Nuevo',        'Defecto recién reportado, sin asignar.',                        1, TRUE),
 ('ESTADO_DEFECTO', 'Asignado',     'Asignado',     'Defecto asignado a un desarrollador.',                          2, TRUE),

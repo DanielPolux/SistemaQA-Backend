@@ -36,23 +36,23 @@ export class CatalogosController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(Rol.ADMIN)
-  @ApiOperation({ summary: 'Crear ítem de catálogo (solo Admin)' })
+  @Roles(Rol.ADMIN, Rol.QA_LEAD)
+  @ApiOperation({ summary: 'Crear ítem de catálogo (Admin o QA Lead)' })
   create(@Body() dto: CreateCatalogoDto) {
     return this.catalogosService.create(dto);
   }
 
   @Put(':id')
   @UseGuards(RolesGuard)
-  @Roles(Rol.ADMIN)
-  @ApiOperation({ summary: 'Actualizar ítem de catálogo (solo Admin)' })
+  @Roles(Rol.ADMIN, Rol.QA_LEAD)
+  @ApiOperation({ summary: 'Actualizar ítem de catálogo (Admin o QA Lead)' })
   update(@Param('id') id: string, @Body() dto: UpdateCatalogoDto) {
     return this.catalogosService.update(+id, dto);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(Rol.ADMIN)
+  @Roles(Rol.ADMIN, Rol.QA_LEAD)
   @ApiOperation({ summary: 'Eliminar ítem (no aplica a ítems del sistema)' })
   remove(@Param('id') id: string) {
     return this.catalogosService.remove(+id);

@@ -8,6 +8,7 @@ import { UpdateProyectoDto } from './dto/update-proyecto.dto';
 import { QueryProyectoDto } from './dto/query-proyecto.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { MailService } from '../mail/mail.service';
+import { CatalogosService } from '../catalogos/catalogos.service';
 
 const TRANSICIONES_ESTADO: Record<EstadoProyecto, EstadoProyecto[]> = {
   [EstadoProyecto.POR_ESTIMAR]:   [EstadoProyecto.ESTIMADO],
@@ -26,6 +27,7 @@ export class ProyectosService {
   constructor(
     @InjectRepository(Proyecto)
     private proyectosRepo: Repository<Proyecto>,
+    private catalogosService: CatalogosService,
     private mailService: MailService,
     private config: ConfigService,
   ) {}
@@ -202,6 +204,7 @@ export class ProyectosService {
   }
 
   async create(dto: CreateProyectoDto, creadoPor: number): Promise<Proyecto> {
+    await this.catalogosService.validarClienteActivo(dto.cliente);
     if (dto.codigo) {
       const existe = await this.proyectosRepo.findOne({ where: { codigo: dto.codigo } });
       if (existe) throw new BadRequestException(`El código '${dto.codigo}' ya está en uso`);
@@ -220,6 +223,9 @@ export class ProyectosService {
   async update(id: number, dto: UpdateProyectoDto): Promise<Proyecto> {
     const proyecto = await this.proyectosRepo.findOne({ where: { id } });
     if (!proyecto) throw new NotFoundException(`Proyecto #${id} no encontrado`);
+    if (dto.cliente && dto.cliente !== proyecto.cliente) {
+      await this.catalogosService.validarClienteActivo(dto.cliente);
+    }
     if (dto.codigo && dto.codigo !== proyecto.codigo) {
       const existe = await this.proyectosRepo.findOne({ where: { codigo: dto.codigo } });
       if (existe) throw new BadRequestException(`El código '${dto.codigo}' ya está en uso`);
