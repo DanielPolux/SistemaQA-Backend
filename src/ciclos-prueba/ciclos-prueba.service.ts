@@ -32,6 +32,7 @@ export class CiclosPruebaService {
       .createQueryBuilder('c')
       .leftJoin('c.proyecto', 'p').addSelect(['p.nombre', 'p.codigo'])
       .leftJoin('c.creador',  'u').addSelect(['u.nombre', 'u.apellido'])
+      .leftJoin('c.responsableQa', 'rqa').addSelect(['rqa.nombre', 'rqa.apellido'])
       .loadRelationCountAndMap('c.totalEjecuciones', 'c.ejecuciones')
       .orderBy('c.creadoEn', 'DESC')
       .skip(skip)
@@ -41,7 +42,7 @@ export class CiclosPruebaService {
     if (query.estado)     qb.andWhere('c.estado = :estado', { estado: query.estado });
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(userProjectFilter('c'), { uid: usuarioId });
+      qb.andWhere(userProjectFilter('c', 'c.responsableQaId = :uid'), { uid: usuarioId });
     }
 
     const [items, total] = await qb.getManyAndCount();
@@ -51,8 +52,10 @@ export class CiclosPruebaService {
       proyectoNombre:  c.proyecto?.nombre ?? null,
       proyectoCodigo:  c.proyecto?.codigo ?? null,
       creadoPorNombre: c.creador ? `${c.creador.nombre} ${c.creador.apellido}` : null,
+      responsableQaNombre: c.responsableQa ? `${c.responsableQa.nombre} ${c.responsableQa.apellido}` : null,
       proyecto: undefined,
       creador:  undefined,
+      responsableQa: undefined,
     }));
 
 
@@ -62,7 +65,7 @@ export class CiclosPruebaService {
   async findOne(id: number): Promise<any> {
     const c = await this.repo.findOne({
       where: { id },
-      relations: ['proyecto', 'creador'],
+      relations: ['proyecto', 'creador', 'responsableQa'],
     });
     if (!c) throw new NotFoundException(`Ciclo #${id} no encontrado`);
     return {
@@ -70,8 +73,10 @@ export class CiclosPruebaService {
       proyectoNombre:  c.proyecto?.nombre   ?? null,
       proyectoCodigo:  c.proyecto?.codigo   ?? null,
       creadoPorNombre: c.creador ? `${c.creador.nombre} ${c.creador.apellido}` : null,
+      responsableQaNombre: c.responsableQa ? `${c.responsableQa.nombre} ${c.responsableQa.apellido}` : null,
       proyecto: undefined,
       creador:  undefined,
+      responsableQa: undefined,
     };
   }
 
@@ -200,6 +205,14 @@ export class CiclosPruebaService {
     );
     if (!proyecto) throw new NotFoundException('Proyecto no encontrado');
 
+    const [responsable] = await this.repo.manager.query(
+      `SELECT id FROM usuarios WHERE id = $1 AND rol = 'QA Tester' AND activo = true`,
+      [dto.responsableQaId],
+    );
+    if (!responsable) {
+      throw new BadRequestException('El Responsable QA debe ser un Tester QA activo.');
+    }
+
     const estadosPermitidos = ['Planificado', 'En Ejecución', 'Observado'];
     if (!estadosPermitidos.includes(proyecto.estado)) {
       throw new BadRequestException(
@@ -264,6 +277,7 @@ export class CiclosPruebaService {
       estado: EstadoCiclo.ACTIVO,
     });
     const saved = await this.repo.save(ciclo);
+    void this.enviarAsignacionResponsable(saved).catch(() => undefined);
 
     // Auto-advance linked plan state to 'En ejecución'
     if (saved.planPruebaId) {
@@ -293,8 +307,29 @@ export class CiclosPruebaService {
 
   async update(id: number, dto: Partial<CreateCicloPruebaDto>): Promise<CicloPrueba> {
     const ciclo = await this.findOne(id);
+    const responsableAnterior = ciclo.responsableQaId;
     Object.assign(ciclo, dto);
-    return this.repo.save(ciclo);
+    const saved = await this.repo.save(ciclo);
+    if (dto.responsableQaId && dto.responsableQaId !== responsableAnterior) {
+      void this.enviarAsignacionResponsable(saved).catch(() => undefined);
+    }
+    return saved;
+  }
+
+  private async enviarAsignacionResponsable(ciclo: CicloPrueba): Promise<void> {
+    const [datos] = await this.repo.manager.query(
+      `SELECT u.email, u.nombre, p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre
+       FROM usuarios u
+       JOIN proyectos p ON p.id = $2
+       WHERE u.id = $1`,
+      [ciclo.responsableQaId, ciclo.proyectoId],
+    );
+    if (!datos?.email) return;
+    await this.mailService.send({
+      to: datos.email,
+      subject: `[Ciclo QA] ${datos.proyecto_codigo} - ${ciclo.nombre}`,
+      html: `<p>Hola ${datos.nombre},</p><p>Has sido asignado/a como <strong>Responsable QA</strong> del ciclo <strong>${ciclo.nombre}</strong> del proyecto <strong>${datos.proyecto_codigo} - ${datos.proyecto_nombre}</strong>.</p>`,
+    });
   }
 
   async cerrar(id: number, dto: CerrarCicloDto, usuarioId: number, usuarioNombre: string): Promise<any> {

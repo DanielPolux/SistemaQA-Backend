@@ -47,6 +47,13 @@ export class CicloPrueba {
   @JoinColumn({ name: 'creado_por' })
   creador: Usuario;
 
+  @Column({ name: 'responsable_qa_id', type: 'int', nullable: true })
+  responsableQaId: number | null;
+
+  @ManyToOne(() => Usuario, { eager: false })
+  @JoinColumn({ name: 'responsable_qa_id' })
+  responsableQa: Usuario | null;
+
   @Column({ name: 'plan_prueba_id', type: 'int', nullable: true })
   planPruebaId: number | null;
 

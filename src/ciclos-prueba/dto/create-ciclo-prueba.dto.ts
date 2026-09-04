@@ -10,6 +10,10 @@ export class CreateCicloPruebaDto {
   @IsNumber()
   proyectoId: number;
 
+  @Type(() => Number)
+  @IsNumber()
+  responsableQaId: number;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)

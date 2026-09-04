@@ -58,6 +58,10 @@ export class ProyectosService {
             WHERE cp.proyecto_id = p.id AND cp.responsable_qa_id = :uid
           )
           OR EXISTS (
+            SELECT 1 FROM ciclos_prueba ci
+            WHERE ci.proyecto_id = p.id AND ci.responsable_qa_id = :uid
+          )
+          OR EXISTS (
             SELECT 1 FROM defectos d
             WHERE d.proyecto_id = p.id AND (d.asignado_a = :uid OR d.reportado_por = :uid)
           ))`,
@@ -126,6 +130,7 @@ export class ProyectosService {
             OR p.jefe_qa_id = $2
             OR p.responsable_qa_id = $2
             OR EXISTS (SELECT 1 FROM casos_prueba cp WHERE cp.proyecto_id = p.id AND cp.responsable_qa_id = $2)
+            OR EXISTS (SELECT 1 FROM ciclos_prueba ci WHERE ci.proyecto_id = p.id AND ci.responsable_qa_id = $2)
             OR EXISTS (SELECT 1 FROM defectos d    WHERE d.proyecto_id  = p.id AND (d.asignado_a = $2 OR d.reportado_por = $2))
           ) AS tiene_acceso
           FROM proyectos p WHERE p.id = $1`,

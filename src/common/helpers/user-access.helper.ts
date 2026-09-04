@@ -10,6 +10,7 @@ export function userProjectFilter(entityAlias: string, extra?: string): string {
     SELECT pr.id FROM proyectos pr
     WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
        OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
+       OR EXISTS (SELECT 1 FROM ciclos_prueba ci2 WHERE ci2.proyecto_id = pr.id AND ci2.responsable_qa_id = :uid)
        OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
   )`;
   return extra ? `(${inSubquery} OR ${extra})` : inSubquery;
