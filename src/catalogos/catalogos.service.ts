@@ -77,10 +77,7 @@ export class CatalogosService {
 
   async create(dto: CreateCatalogoDto): Promise<Catalogo> {
     dto.grupo = dto.grupo.trim().toUpperCase();
-    dto.codigo = dto.codigo.trim().toUpperCase();
     dto.nombre = dto.nombre.trim();
-    const existe = await this.repo.findOne({ where: { grupo: dto.grupo, codigo: dto.codigo } });
-    if (existe) throw new BadRequestException(`Ya existe un ítem con grupo="${dto.grupo}" y código="${dto.codigo}"`);
 
     if (dto.grupo === 'CLIENTE') {
       const mismoNombre = await this.repo
@@ -89,7 +86,15 @@ export class CatalogosService {
         .andWhere('LOWER(c.nombre) = LOWER(:nombre)', { nombre: dto.nombre })
         .getOne();
       if (mismoNombre) throw new BadRequestException('Ya existe un cliente con ese nombre');
+      const siguiente = await this.siguienteCliente();
+      dto.codigo = siguiente.codigo;
+      dto.orden = siguiente.orden;
+    } else {
+      dto.codigo = dto.codigo!.trim().toUpperCase();
     }
+
+    const existe = await this.repo.findOne({ where: { grupo: dto.grupo, codigo: dto.codigo } });
+    if (existe) throw new BadRequestException(`Ya existe un ítem con grupo="${dto.grupo}" y código="${dto.codigo}"`);
 
     const item = this.repo.create({
       ...dto,
@@ -147,6 +152,20 @@ export class CatalogosService {
   }
 
   /** Incorpora al catálogo los clientes históricos sin modificar los proyectos existentes. */
+  private async siguienteCliente(): Promise<{ codigo: string; orden: number }> {
+    const fila = await this.repo
+      .createQueryBuilder('c')
+      .select("COALESCE(MAX(CASE WHEN c.codigo ~ '^CLI-[0-9]+$' THEN CAST(SUBSTRING(c.codigo FROM 5) AS INTEGER) ELSE 0 END), 0)", 'numero')
+      .addSelect('COALESCE(MAX(c.orden), 0)', 'orden')
+      .where('c.grupo = :grupo', { grupo: 'CLIENTE' })
+      .getRawOne();
+    const numero = Number(fila?.numero ?? 0) + 1;
+    return {
+      codigo: `CLI-${String(numero).padStart(3, '0')}`,
+      orden: Number(fila?.orden ?? 0) + 1,
+    };
+  }
+
   private async sincronizarClientesExistentes(): Promise<void> {
     const filas: Array<{ cliente: string }> = await this.proyectoRepo
       .createQueryBuilder('p')
