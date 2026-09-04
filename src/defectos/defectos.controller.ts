@@ -29,8 +29,9 @@ import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 const ROLES_CREAR      = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 // QA y PM pueden editar defectos (PM para asignar desarrollador)
 const ROLES_EDITAR     = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
-// Todos pueden cambiar el estado del defecto (cerrar, reabrir, etc.)
-const ROLES_ESTADO     = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
+// QA revisa la respuesta y el desarrollador asignado puede iniciar la atención.
+// El servicio restringe las transiciones permitidas para cada rol.
+const ROLES_ESTADO     = [Rol.ADMIN, Rol.DEVELOPER, Rol.QA_LEAD, Rol.QA_TESTER];
 // Solo el desarrollador (y admin) actualiza el estado de desarrollo (Atendido/No Aplica)
 const ROLES_ESTADO_DEV = [Rol.ADMIN, Rol.DEVELOPER];
 

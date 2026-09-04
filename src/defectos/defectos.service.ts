@@ -355,7 +355,29 @@ export class DefectosService {
   ): Promise<Defecto> {
     const defecto = await this.defectosRepo.findOne({ where: { id } });
     if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
-    await this.validarGestionProyecto(defecto.proyectoId, usuarioId, rol);
+
+    if (rol === Rol.DEVELOPER) {
+      const puedeIniciar = defecto.asignadoA === usuarioId &&
+        dto.estado === EstadoDefecto.EN_PROGRESO &&
+        [EstadoDefecto.ASIGNADO, EstadoDefecto.REABIERTO].includes(defecto.estado);
+      if (!puedeIniciar) {
+        throw new ForbiddenException('El desarrollador solo puede iniciar la atención de un defecto que tenga asignado.');
+      }
+    } else {
+      await this.validarGestionProyecto(defecto.proyectoId, usuarioId, rol);
+    }
+
+    if (defecto.estado === EstadoDefecto.EN_REVISION && rol !== Rol.DEVELOPER) {
+      const destinoEsperado = defecto.estadoDesarrollo === EstadoDesarrollo.NO_APLICA
+        ? EstadoDefecto.RECHAZADO
+        : EstadoDefecto.CERRADO;
+      const destinosPermitidos = [destinoEsperado, EstadoDefecto.REABIERTO];
+      if (!destinosPermitidos.includes(dto.estado)) {
+        throw new BadRequestException(
+          `La revisión QA solo permite ${destinoEsperado} o Reabierto para esta respuesta del desarrollador.`,
+        );
+      }
+    }
 
     const estadoAnterior = defecto.estado;
     defecto.estado = dto.estado;
