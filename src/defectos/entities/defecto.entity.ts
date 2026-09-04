@@ -128,7 +128,7 @@ export class Defecto {
   reportador: Usuario;
 
   @Column({ name: 'fecha_resolucion', type: 'timestamp', nullable: true })
-  fechaResolucion: Date;
+  fechaResolucion: Date | null;
 
   @Column({
     name: 'estado_desarrollo',

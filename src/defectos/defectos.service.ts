@@ -207,6 +207,18 @@ export class DefectosService {
 
     Object.assign(defecto, dto);
 
+    // Al derivar el defecto a un desarrollador comienza formalmente su flujo
+    // de atención. La respuesta previa se limpia en una reasignación.
+    if (dto.asignadoA && dto.asignadoA !== asignadoAnterior) {
+      const nuevoAsignado = await this.usuariosRepo.findOne({ where: { id: dto.asignadoA } });
+      if (nuevoAsignado?.rol === Rol.DEVELOPER) {
+        defecto.estado = EstadoDefecto.ASIGNADO;
+        defecto.estadoDesarrollo = null;
+        defecto.comentariosDesarrollo = null;
+        defecto.fechaResolucion = null;
+      }
+    }
+
     // Si el developer actualiza estadoDesarrollo, transicionar a En Revisión
     if (dto.estadoDesarrollo) {
       const estadosFinales = [EstadoDefecto.CERRADO, EstadoDefecto.RECHAZADO, EstadoDefecto.REABIERTO];
@@ -251,10 +263,12 @@ export class DefectosService {
       defecto.fechaResolucion = new Date();
     }
 
-    // Al reabrir (En Revisión → Asignado), limpiar respuesta del dev para que pueda volver a responder
-    if (dto.estado === EstadoDefecto.ASIGNADO && estadoAnterior === EstadoDefecto.EN_REVISION) {
+    // Al reabrir, limpiar la respuesta anterior para iniciar una nueva atención.
+    if (dto.estado === EstadoDefecto.REABIERTO ||
+        (dto.estado === EstadoDefecto.ASIGNADO && estadoAnterior === EstadoDefecto.EN_REVISION)) {
       defecto.estadoDesarrollo    = null;
       defecto.comentariosDesarrollo = null;
+      defecto.fechaResolucion = null;
     }
 
     const saved = await this.defectosRepo.save(defecto);
