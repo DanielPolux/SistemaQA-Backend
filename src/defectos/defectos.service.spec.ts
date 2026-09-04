@@ -102,6 +102,8 @@ describe('DefectosService', () => {
         typeof c[0] === 'string' && c[0].includes('proyecto_id'),
       );
       expect(whereCall).toBeDefined();
+      expect(whereCall[0]).toContain('ciclos_prueba');
+      expect(whereCall[0]).toContain('ci2.responsable_qa_id = :uid');
     });
   });
 

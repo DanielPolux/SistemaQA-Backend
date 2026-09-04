@@ -9,6 +9,7 @@ import { QueryEjecucionDto } from './dto/query-ejecucion.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { DefectosService } from '../defectos/defectos.service';
+import { userProjectFilter } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class EjecucionesService {
@@ -239,15 +240,10 @@ export class EjecucionesService {
     if (query.fechaHasta)   qb.andWhere('e.creadoEn     <= :fhasta', { fhasta: query.fechaHasta + 'T23:59:59' });
 
     if (!esAdmin && usuarioId) {
-      qb.andWhere(
-        `(e.proyectoId IN (
-          SELECT pr.id FROM proyectos pr
-          WHERE pr.jefe_proyecto_id = :uid OR pr.jefe_qa_id = :uid OR pr.responsable_qa_id = :uid
-             OR EXISTS (SELECT 1 FROM casos_prueba cp2 WHERE cp2.proyecto_id = pr.id AND cp2.responsable_qa_id = :uid)
-             OR EXISTS (SELECT 1 FROM defectos d2    WHERE d2.proyecto_id  = pr.id AND (d2.asignado_a = :uid OR d2.reportado_por = :uid))
-        ) OR e.testerId = :uid)`,
-        { uid: usuarioId },
-      );
+      // La asignación a cualquier ciclo del proyecto concede visibilidad del
+      // historial completo: ejecuciones y defectos de ciclos anteriores,
+      // aunque hayan sido registrados por otro tester.
+      qb.andWhere(userProjectFilter('e', 'e.testerId = :uid'), { uid: usuarioId });
     }
 
     const [items, total] = await qb.getManyAndCount();
