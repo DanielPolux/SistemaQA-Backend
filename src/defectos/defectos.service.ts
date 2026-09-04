@@ -248,7 +248,7 @@ export class DefectosService {
     return saved;
   }
 
-  async asignarLote(dto: AsignarDefectosLoteDto, usuarioId: number, usuarioNombre: string): Promise<{ asignados: number }> {
+  async asignarLote(dto: AsignarDefectosLoteDto, usuarioId: number, usuarioNombre: string): Promise<{ asignados: number; correoEnviado: boolean }> {
     const ids = [...new Set(dto.defectoIds)];
     const desarrollador = await this.usuariosRepo.findOne({ where: { id: dto.desarrolladorId } });
     if (!desarrollador || !desarrollador.activo || desarrollador.rol !== Rol.DEVELOPER) {
@@ -282,10 +282,28 @@ export class DefectosService {
         accion: 'Asignación Masiva', campo: 'asignadoA', valorNuevo: `${desarrollador.nombre} ${desarrollador.apellido}`,
       });
     }
-    void this.enviarCorreoAsignacionLote(defectos, desarrollador).catch(err =>
-      this.logger.warn(`enviarCorreoAsignacionLote: ${err?.message ?? err}`),
-    );
-    return { asignados: defectos.length };
+    let correoEnviado = false;
+    try {
+      await this.enviarCorreoAsignacionLote(defectos, desarrollador);
+      correoEnviado = true;
+      for (const defecto of defectos) {
+        await this.auditoriaService.registrar({
+          entidad: 'Defecto', entidadId: defecto.id, usuarioNombre: 'Sistema',
+          accion: 'Correo Enviado', campo: 'notificacion',
+          valorNuevo: `Asignación masiva → To: ${desarrollador.email}`,
+        });
+      }
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`enviarCorreoAsignacionLote: ${detalle}`);
+      for (const defecto of defectos) {
+        await this.auditoriaService.registrar({
+          entidad: 'Defecto', entidadId: defecto.id, usuarioNombre: 'Sistema',
+          accion: 'Error Correo', campo: 'notificacion', valorNuevo: detalle,
+        });
+      }
+    }
+    return { asignados: defectos.length, correoEnviado };
   }
 
   private async enviarCorreoAsignacionLote(defectos: Defecto[], desarrollador: Usuario): Promise<void> {
