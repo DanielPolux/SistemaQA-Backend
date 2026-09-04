@@ -128,7 +128,7 @@ export class DashboardService {
     return this.ds.query(`${this.activeScopeCte(esAdmin, esTester)}
       SELECT CASE WHEN u.id IS NULL THEN 'Pendiente' ELSE 'Ejecutado' END AS estado, COUNT(*)::int AS total
       FROM alcance a LEFT JOIN ultima u ON u.ciclo_id=a.ciclo_id AND u.caso_prueba_id=a.caso_prueba_id
-      GROUP BY 1 ORDER BY total DESC`, [usuarioId]);
+      GROUP BY 1 ORDER BY total DESC`, esAdmin ? [] : [usuarioId]);
   }
 
   private async getDefectosPorSeveridad(usuarioId: number, esAdmin: boolean) {
@@ -161,7 +161,7 @@ export class DashboardService {
       LEFT JOIN ultima u ON u.ciclo_id=a.ciclo_id AND u.caso_prueba_id=a.caso_prueba_id
       GROUP BY p.id,ca.ciclo_id,ca.ciclo_nombre
       ORDER BY porcentaje_avance DESC,p.nombre ASC LIMIT 6
-    `, [usuarioId]);
+    `, esAdmin ? [] : [usuarioId]);
   }
 
   private async getMisCasos(usuarioId: number, esAdmin: boolean, esTester: boolean) {
@@ -227,6 +227,6 @@ export class DashboardService {
   private async getResultadosEjecucion(usuarioId: number, esAdmin: boolean, esTester: boolean) {
     return this.ds.query(`${this.activeScopeCte(esAdmin, esTester)}
       SELECT u.resultado::text AS resultado,COUNT(*)::int AS total
-      FROM ultima u GROUP BY u.resultado ORDER BY total DESC`, [usuarioId]);
+      FROM ultima u GROUP BY u.resultado ORDER BY total DESC`, esAdmin ? [] : [usuarioId]);
   }
 }
