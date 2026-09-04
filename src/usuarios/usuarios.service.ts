@@ -55,6 +55,9 @@ export class UsuariosService {
     const existe = await this.usuariosRepo.findOne({ where: { email: dto.email } });
     if (existe) throw new BadRequestException('El email ya está registrado');
 
+    const existeUsername = await this.usuariosRepo.findOne({ where: { username: dto.username } });
+    if (existeUsername) throw new BadRequestException('El nombre de usuario ya está en uso');
+
     const hash = await bcrypt.hash(dto.password, 10);
     const usuario = this.usuariosRepo.create({ ...dto, password: hash });
     return this.usuariosRepo.save(usuario);
@@ -62,6 +65,12 @@ export class UsuariosService {
 
   async update(id: number, dto: UpdateUsuarioDto): Promise<Usuario> {
     const usuario = await this.findOne(id);
+
+    if (dto.username && dto.username !== usuario.username) {
+      const existeUsername = await this.usuariosRepo.findOne({ where: { username: dto.username } });
+      if (existeUsername) throw new BadRequestException('El nombre de usuario ya está en uso');
+    }
+
     if (dto.password) {
       dto.password = await bcrypt.hash(dto.password, 10);
     }
