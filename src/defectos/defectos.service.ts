@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,6 +16,7 @@ import { MailService, MailAttachment } from '../mail/mail.service';
 import { userProjectFilter } from '../common/helpers/user-access.helper';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { DefectoWordService, EvidenciaArchivo } from './defecto-word.service';
+import { AsignarDefectosLoteDto } from './dto/asignar-defectos-lote.dto';
 
 const CAMPOS_AUDIT_DEFECTO = ['titulo', 'descripcion', 'severidad', 'prioridad', 'asignadoA', 'estado'];
 
@@ -245,6 +246,59 @@ export class DefectosService {
     }
 
     return saved;
+  }
+
+  async asignarLote(dto: AsignarDefectosLoteDto, usuarioId: number, usuarioNombre: string): Promise<{ asignados: number }> {
+    const ids = [...new Set(dto.defectoIds)];
+    const desarrollador = await this.usuariosRepo.findOne({ where: { id: dto.desarrolladorId } });
+    if (!desarrollador || !desarrollador.activo || desarrollador.rol !== Rol.DEVELOPER) {
+      throw new BadRequestException('Selecciona un desarrollador activo.');
+    }
+
+    const defectos = await this.defectosRepo.find({ where: ids.map(id => ({ id })) });
+    if (defectos.length !== ids.length) throw new BadRequestException('Uno o más defectos no existen.');
+    if (new Set(defectos.map(d => d.proyectoId)).size !== 1) {
+      throw new BadRequestException('Todos los defectos deben pertenecer al mismo proyecto.');
+    }
+    const noAsignables = defectos.filter(d => [EstadoDefecto.CERRADO, EstadoDefecto.RECHAZADO].includes(d.estado));
+    if (noAsignables.length) {
+      throw new BadRequestException(`No se pueden asignar defectos Cerrados o Rechazados: ${noAsignables.map(d => d.codigoProyecto ?? d.codigo).join(', ')}.`);
+    }
+
+    await this.defectosRepo.manager.transaction(async manager => {
+      for (const defecto of defectos) {
+        defecto.asignadoA = desarrollador.id;
+        defecto.estado = EstadoDefecto.ASIGNADO;
+        defecto.estadoDesarrollo = null;
+        defecto.comentariosDesarrollo = null;
+        defecto.fechaResolucion = null;
+        await manager.save(Defecto, defecto);
+      }
+    });
+
+    for (const defecto of defectos) {
+      await this.auditoriaService.registrar({
+        entidad: 'Defecto', entidadId: defecto.id, usuarioId, usuarioNombre,
+        accion: 'Asignación Masiva', campo: 'asignadoA', valorNuevo: `${desarrollador.nombre} ${desarrollador.apellido}`,
+      });
+    }
+    void this.enviarCorreoAsignacionLote(defectos, desarrollador).catch(err =>
+      this.logger.warn(`enviarCorreoAsignacionLote: ${err?.message ?? err}`),
+    );
+    return { asignados: defectos.length };
+  }
+
+  private async enviarCorreoAsignacionLote(defectos: Defecto[], desarrollador: Usuario): Promise<void> {
+    if (!desarrollador.email || !defectos.length) return;
+    const proyecto = await this.proyectosRepo.findOne({ where: { id: defectos[0].proyectoId }, relations: ['jefeProyecto'] });
+    const baseUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200').replace(/\/$/, '');
+    const filas = defectos.map((d, i) => `<tr style="background:${i % 2 ? '#f6f8fb' : '#fff'}"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">${d.codigoProyecto ?? d.codigo}</td><td style="padding:9px;border:1px solid #d9e0e7">${d.titulo}</td><td style="padding:9px;border:1px solid #d9e0e7">${d.severidad}</td><td style="padding:9px;border:1px solid #d9e0e7">${d.prioridad}</td></tr>`).join('');
+    const cc = proyecto?.jefeProyecto?.email && proyecto.jefeProyecto.email !== desarrollador.email ? [proyecto.jefeProyecto.email] : undefined;
+    await this.mailService.send({
+      to: desarrollador.email, cc,
+      subject: `[Asignación de defectos] ${proyecto?.codigo ?? ''} - ${defectos.length} defecto${defectos.length === 1 ? '' : 's'}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#1f2937"><div style="background:#2D4F72;padding:22px 24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0;font-size:21px">Asignación de defectos</h2></div><div style="background:#f8fafc;padding:26px 24px;border:1px solid #e2e8f0;border-top:0"><p>Estimado/a <strong>${desarrollador.nombre} ${desarrollador.apellido}</strong>:</p><p>Se le han asignado los siguientes defectos del proyecto <strong>${proyecto?.codigo ?? ''} - ${proyecto?.nombre ?? ''}</strong>:</p><table style="width:100%;border-collapse:collapse;margin:18px 0"><thead><tr style="background:#eaf0f6"><th style="padding:9px;border:1px solid #d9e0e7">Defecto</th><th style="padding:9px;border:1px solid #d9e0e7">Título</th><th style="padding:9px;border:1px solid #d9e0e7">Severidad</th><th style="padding:9px;border:1px solid #d9e0e7">Prioridad</th></tr></thead><tbody>${filas}</tbody></table><div style="text-align:center;margin:26px 0"><a href="${baseUrl}/defectos?proyectoId=${defectos[0].proyectoId}" style="background:#2D4F72;color:#fff;padding:12px 26px;border-radius:6px;text-decoration:none;font-weight:bold">Revisar defectos asignados</a></div><p>Atentamente,<br><strong>Equipo de Aseguramiento de Calidad</strong></p><hr style="border:none;border-top:1px solid #d9e0e7"><p style="color:#6b7280;font-size:12px">Sistema QA — Notificación automática. Por favor, no responda este mensaje.</p></div></div>`,
+    });
   }
 
   async cambiarEstado(

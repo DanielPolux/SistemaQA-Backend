@@ -22,6 +22,7 @@ import { QueryDefectoDto } from './dto/query-defecto.dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { CambiarEstadoDesarrolloDto } from './dto/cambiar-estado-desarrollo.dto';
 import { CreateComentarioDto } from './dto/create-comentario.dto';
+import { AsignarDefectosLoteDto } from './dto/asignar-defectos-lote.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
 // Solo QA puede reportar (crear) defectos
@@ -64,6 +65,14 @@ export class DefectosController {
   @ApiOperation({ summary: 'Crear nuevo defecto' })
   create(@Body() dto: CreateDefectoDto, @CurrentUser() user: Usuario) {
     return this.defectosService.create(dto, user.id, `${user.nombre} ${user.apellido}`);
+  }
+
+  @Patch('asignacion-lote')
+  @UseGuards(RolesGuard)
+  @Roles(Rol.ADMIN, Rol.QA_LEAD, Rol.PROJECT_MANAGER)
+  @ApiOperation({ summary: 'Asignar varios defectos del mismo proyecto a un desarrollador' })
+  asignarLote(@Body() dto: AsignarDefectosLoteDto, @CurrentUser() user: Usuario) {
+    return this.defectosService.asignarLote(dto, user.id, `${user.nombre} ${user.apellido}`);
   }
 
   @Put(':id')
