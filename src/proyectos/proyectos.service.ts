@@ -83,10 +83,10 @@ export class ProyectosService {
 
     const [proyectos, total] = await qb.getManyAndCount();
 
-    let progressMap: Record<number, { avance: number; aprobacion: number }> = {};
+    let progressMap: Record<number, { avance: number; aprobacion: number; totalCasos: number; defectosAbiertos: number; cicloActual: string | null }> = {};
     if (proyectos.length > 0) {
       const ids = proyectos.map((p) => p.id);
-      const rows: Array<{ id: string; avance: string; aprobacion: string }> =
+      const rows: Array<{ id: string; avance: string; aprobacion: string; total_casos: string; defectos_abiertos: string; ciclo_actual: string | null }> =
         await this.proyectosRepo.manager.query(
           `SELECT p.id,
             CASE WHEN COUNT(cp.id) = 0 THEN 0
@@ -94,7 +94,13 @@ export class ProyectosService {
             END AS avance,
             CASE WHEN COUNT(ue.resultado) = 0 THEN 0
                  ELSE ROUND(COUNT(CASE WHEN ue.resultado::text = 'Aprobado' THEN 1 END) * 100.0 / COUNT(ue.resultado))
-            END AS aprobacion
+            END AS aprobacion,
+            COUNT(cp.id)::int AS total_casos,
+            (SELECT COUNT(*)::int FROM defectos d WHERE d.proyecto_id=p.id
+              AND d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado')) AS defectos_abiertos,
+            (SELECT ci.nombre FROM ciclos_prueba ci WHERE ci.proyecto_id=p.id
+              ORDER BY CASE ci.estado::text WHEN 'En ejecución' THEN 0 WHEN 'Planificado' THEN 1 ELSE 2 END,
+                ci.fecha_inicio DESC NULLS LAST,ci.id DESC LIMIT 1) AS ciclo_actual
            FROM proyectos p
            LEFT JOIN casos_prueba cp ON cp.proyecto_id = p.id
            LEFT JOIN LATERAL (SELECT e.resultado FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id ORDER BY e.creado_en DESC LIMIT 1) ue ON true
@@ -103,7 +109,11 @@ export class ProyectosService {
           [ids],
         );
       progressMap = Object.fromEntries(
-        rows.map((r) => [Number(r.id), { avance: Number(r.avance), aprobacion: Number(r.aprobacion) }]),
+        rows.map((r) => [Number(r.id), {
+          avance: Number(r.avance), aprobacion: Number(r.aprobacion),
+          totalCasos: Number(r.total_casos), defectosAbiertos: Number(r.defectos_abiertos),
+          cicloActual: r.ciclo_actual,
+        }]),
       );
     }
 
@@ -111,6 +121,9 @@ export class ProyectosService {
       ...this.mapProyecto(p),
       porcentajeAvance:     progressMap[p.id]?.avance     ?? 0,
       porcentajeAprobacion: progressMap[p.id]?.aprobacion ?? 0,
+      totalCasosPrueba:     progressMap[p.id]?.totalCasos ?? 0,
+      defectosAbiertos:     progressMap[p.id]?.defectosAbiertos ?? 0,
+      cicloActual:          progressMap[p.id]?.cicloActual ?? null,
     }));
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }

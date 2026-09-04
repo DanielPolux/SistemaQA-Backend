@@ -28,6 +28,8 @@ export class ReportesService {
 
     const [
       resumenRows,
+      resultadosPorGrupo,
+      defectosPrioritarios,
       casosPorEstado,
       resultadosEjecucion,
       defectosPorSeveridad,
@@ -60,6 +62,21 @@ export class ReportesService {
          FROM casos_prueba cp LEFT JOIN ultima u ON u.caso_prueba_id=cp.id WHERE cp.proyecto_id = $1`,
         [id],
       ),
+      this.ds.query(
+        `WITH ultima AS (SELECT DISTINCT ON (caso_prueba_id) caso_prueba_id,resultado FROM ejecuciones_caso_prueba WHERE proyecto_id=$1 ORDER BY caso_prueba_id,creado_en DESC)
+         SELECT cp.tipo::text AS grupo,
+          COUNT(*) FILTER (WHERE u.resultado::text='Aprobado')::int AS aprobados,
+          COUNT(*) FILTER (WHERE u.resultado::text='Fallido')::int AS fallidos,
+          COUNT(*) FILTER (WHERE u.resultado::text='Bloqueado')::int AS bloqueados,
+          COUNT(u.caso_prueba_id)::int AS total
+         FROM casos_prueba cp LEFT JOIN ultima u ON u.caso_prueba_id=cp.id
+         WHERE cp.proyecto_id=$1 GROUP BY cp.tipo ORDER BY total DESC`, [id]),
+      this.ds.query(
+        `SELECT d.id,d.codigo,d.codigo_proyecto AS "codigoProyecto",d.titulo,d.severidad::text AS severidad,
+          d.prioridad::text AS prioridad,d.estado::text AS estado
+         FROM defectos d WHERE d.proyecto_id=$1 AND d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado')
+         ORDER BY CASE d.severidad::text WHEN 'Crítico' THEN 1 WHEN 'Alto' THEN 2 WHEN 'Medio' THEN 3 ELSE 4 END,
+          CASE d.prioridad::text WHEN 'Urgente' THEN 1 WHEN 'Alta' THEN 2 WHEN 'Media' THEN 3 ELSE 4 END,d.creado_en DESC LIMIT 8`, [id]),
 
       this.ds.query(
         `SELECT CASE WHEN EXISTS (SELECT 1 FROM ejecuciones_caso_prueba e WHERE e.caso_prueba_id=cp.id) THEN 'Ejecutado' ELSE 'Pendiente' END AS label,
@@ -134,6 +151,8 @@ export class ReportesService {
       defectosPorSeveridad,
       defectosPorEstado,
       defectosPorPrioridad,
+      resultadosPorGrupo,
+      defectosPrioritarios,
       avancePorCiclo: avancePorCiclo.map((c: any) => ({
         ciclo:     c.ciclo,
         aprobados: Number(c.aprobados),
@@ -176,7 +195,7 @@ export class ReportesService {
       WHERE e.ciclo_id = $1 AND e.proyecto_id = $2
       ORDER BY e.caso_prueba_id, e.creado_en DESC
     )`;
-    const [resumenRows, casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad] = await Promise.all([
+    const [resumenRows, casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad, resultadosPorGrupo, defectosPrioritarios] = await Promise.all([
       this.ds.query(`${baseUltima}
         SELECT COUNT(a.caso_prueba_id)::int AS casos_totales,
           COUNT(u.id)::int AS casos_ejecutados,
@@ -198,6 +217,17 @@ export class ReportesService {
       this.ds.query(`${baseUltima} SELECT d.severidad::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.severidad ORDER BY CASE d.severidad::text WHEN 'Crítico' THEN 1 WHEN 'Alto' THEN 2 WHEN 'Medio' THEN 3 ELSE 4 END`, [cicloId, proyectoId]),
       this.ds.query(`${baseUltima} SELECT d.estado::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.estado ORDER BY valor DESC`, [cicloId, proyectoId]),
       this.ds.query(`${baseUltima} SELECT d.prioridad::text AS label, COUNT(DISTINCT d.id)::int AS valor FROM ultima u JOIN defectos d ON d.id=u.defecto_id GROUP BY d.prioridad ORDER BY CASE d.prioridad::text WHEN 'Urgente' THEN 1 WHEN 'Alta' THEN 2 WHEN 'Media' THEN 3 ELSE 4 END`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT cp.tipo::text AS grupo,
+        COUNT(*) FILTER (WHERE u.resultado::text='Aprobado')::int AS aprobados,
+        COUNT(*) FILTER (WHERE u.resultado::text='Fallido')::int AS fallidos,
+        COUNT(*) FILTER (WHERE u.resultado::text='Bloqueado')::int AS bloqueados,COUNT(u.id)::int AS total
+        FROM alcance a JOIN casos_prueba cp ON cp.id=a.caso_prueba_id LEFT JOIN ultima u ON u.caso_prueba_id=a.caso_prueba_id
+        GROUP BY cp.tipo ORDER BY total DESC`, [cicloId, proyectoId]),
+      this.ds.query(`${baseUltima} SELECT DISTINCT d.id,d.codigo,d.codigo_proyecto AS "codigoProyecto",d.titulo,
+        d.severidad::text AS severidad,d.prioridad::text AS prioridad,d.estado::text AS estado
+        FROM ultima u JOIN defectos d ON d.id=u.defecto_id
+        WHERE d.estado::text NOT IN ('Cerrado','Resuelto','Rechazado')
+        ORDER BY d.id DESC LIMIT 8`, [cicloId, proyectoId]),
     ]);
     const r = resumenRows[0];
     return {
@@ -211,6 +241,7 @@ export class ReportesService {
         porcentajeAvance: Number(r.porcentaje_avance), porcentajeAprobacion: Number(r.porcentaje_aprobacion),
       },
       casosPorEstado, resultadosEjecucion, defectosPorSeveridad, defectosPorEstado, defectosPorPrioridad,
+      resultadosPorGrupo, defectosPrioritarios,
       avancePorCiclo: [{ ciclo: ciclo.nombre, aprobados: Number(r.casos_aprobados), fallidos: Number(r.casos_fallidos), bloqueados: Number(r.casos_bloqueados), omitidos: Number(r.casos_omitidos), total: Number(r.casos_totales) }],
     };
   }

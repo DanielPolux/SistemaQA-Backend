@@ -13,6 +13,7 @@ export class DashboardService {
       resumen, casosPorEstado, defectosPorSeveridad, defectosPorEstado,
       proyectosAvance, misCasos, misDefectosAsignados,
       misDefectosPendientesVerificacion, ultimosDefectos, ultimasEjecuciones,
+      resultadosEjecucion,
     ] = await Promise.all([
       this.getResumen(usuarioId, esAdmin, esTester),
       this.getCasosPorEstado(usuarioId, esAdmin, esTester),
@@ -24,11 +25,13 @@ export class DashboardService {
       this.getMisDefectosPendientesVerificacion(usuarioId, esTester),
       this.getUltimosDefectos(usuarioId, esAdmin),
       this.getUltimasEjecuciones(usuarioId, esAdmin),
+      this.getResultadosEjecucion(usuarioId, esAdmin, esTester),
     ]);
     return {
       resumen, casosPorEstado, defectosPorSeveridad, defectosPorEstado,
       proyectosAvance, misCasos, misDefectosAsignados,
       misDefectosPendientesVerificacion, ultimosDefectos, ultimasEjecuciones,
+      resultadosEjecucion,
     };
   }
 
@@ -219,5 +222,11 @@ export class DashboardService {
       LEFT JOIN usuarios u ON u.id=e.tester_id LEFT JOIN proyectos p ON p.id=e.proyecto_id
       ${filter} ORDER BY e.fecha DESC,e.creado_en DESC LIMIT 8
     `, esAdmin ? [] : [usuarioId]);
+  }
+
+  private async getResultadosEjecucion(usuarioId: number, esAdmin: boolean, esTester: boolean) {
+    return this.ds.query(`${this.activeScopeCte(esAdmin, esTester)}
+      SELECT u.resultado::text AS resultado,COUNT(*)::int AS total
+      FROM ultima u GROUP BY u.resultado ORDER BY total DESC`, [usuarioId]);
   }
 }
