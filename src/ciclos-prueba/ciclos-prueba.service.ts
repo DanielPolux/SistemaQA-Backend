@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CicloPrueba, EstadoCiclo } from './entities/ciclo-prueba.entity';
@@ -12,6 +12,8 @@ import { MailService } from '../mail/mail.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { ConfigService } from '@nestjs/config';
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx';
+import { Rol } from '../usuarios/entities/usuario.entity';
+import { assertProjectAccess } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class CiclosPruebaService {
@@ -24,6 +26,20 @@ export class CiclosPruebaService {
     private auditoriaService: AuditoriaService,
     private config: ConfigService,
   ) {}
+
+  private async validarOperador(id: number, usuarioId: number, rol: Rol): Promise<void> {
+    if (rol !== Rol.QA_TESTER) return;
+    const ciclo = await this.repo.findOne({ where: { id } });
+    if (!ciclo || ciclo.responsableQaId !== usuarioId) {
+      throw new ForbiddenException('Solo puedes operar el ciclo de pruebas que tienes asignado.');
+    }
+  }
+
+  private async validarLecturaCiclo(id: number, usuarioId?: number, esAdmin = true): Promise<void> {
+    const ciclo = await this.repo.findOne({ where: { id } });
+    if (!ciclo) throw new NotFoundException(`Ciclo #${id} no encontrado`);
+    await assertProjectAccess(this.repo.manager, ciclo.proyectoId, usuarioId, esAdmin);
+  }
 
   async findAll(query: QueryCicloPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
@@ -64,12 +80,13 @@ export class CiclosPruebaService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const c = await this.repo.findOne({
       where: { id },
       relations: ['proyecto', 'creador', 'responsableQa'],
     });
     if (!c) throw new NotFoundException(`Ciclo #${id} no encontrado`);
+    await assertProjectAccess(this.repo.manager, c.proyectoId, usuarioId, esAdmin);
     return {
       ...c,
       proyectoNombre:  c.proyecto?.nombre   ?? null,
@@ -82,14 +99,16 @@ export class CiclosPruebaService {
     };
   }
 
-  async findActivoByProyecto(proyectoId: number): Promise<CicloPrueba | null> {
+  async findActivoByProyecto(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<CicloPrueba | null> {
+    await assertProjectAccess(this.repo.manager, proyectoId, usuarioId, esAdmin);
     return this.repo.createQueryBuilder('c')
       .where('c.proyectoId = :proyectoId', { proyectoId })
       .andWhere('c.estado != :cerrado', { cerrado: EstadoCiclo.CERRADO })
       .orderBy('c.creadoEn', 'DESC').getOne();
   }
 
-  async getCasosDeCiclo(cicloId: number): Promise<any[]> {
+  async getCasosDeCiclo(cicloId: number, usuarioId?: number, esAdmin = true): Promise<any[]> {
+    await this.validarLecturaCiclo(cicloId, usuarioId, esAdmin);
     return this.repo.manager.query(
       `WITH planificados AS (
          SELECT caso_prueba_id
@@ -177,7 +196,8 @@ export class CiclosPruebaService {
     );
   }
 
-  async getCasosPrevios(proyectoId: number): Promise<{ tieneHistorial: boolean; casos: any[] }> {
+  async getCasosPrevios(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<{ tieneHistorial: boolean; casos: any[] }> {
+    await assertProjectAccess(this.repo.manager, proyectoId, usuarioId, esAdmin);
     const totalCiclos = await this.repo.count({ where: { proyectoId } });
     if (totalCiclos === 0) return { tieneHistorial: false, casos: [] };
 
@@ -395,7 +415,8 @@ export class CiclosPruebaService {
     });
   }
 
-  async iniciar(id: number, usuarioId: number, usuarioNombre: string): Promise<CicloPrueba> {
+  async iniciar(id: number, usuarioId: number, usuarioNombre: string, rol: Rol): Promise<CicloPrueba> {
+    await this.validarOperador(id, usuarioId, rol);
     const ciclo = await this.findOne(id);
     if (ciclo.estado !== EstadoCiclo.PLANIFICADO) {
       throw new BadRequestException(`Solo se puede iniciar un ciclo Planificado. Estado actual: "${ciclo.estado}".`);
@@ -439,7 +460,8 @@ export class CiclosPruebaService {
     return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1f2937"><div style="background:${color};padding:22px 24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0;font-size:21px">${titulo}</h2></div><div style="background:#f8fafc;padding:26px 24px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px"><p>Estimado/a <strong>${datos.nombre} ${datos.apellido}</strong>:</p><p>${mensaje}</p><table style="width:100%;border-collapse:collapse;margin:18px 0"><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600;width:32%">Proyecto</td><td style="padding:9px;border:1px solid #d9e0e7">${datos.proyecto_codigo} - ${datos.proyecto_nombre}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ciclo</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.nombre}</td></tr><tr><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Ambiente</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.ambiente ?? '—'}</td></tr><tr style="background:#fff"><td style="padding:9px;border:1px solid #d9e0e7;font-weight:600">Inicio real</td><td style="padding:9px;border:1px solid #d9e0e7">${ciclo.fechaInicioReal ? new Date(ciclo.fechaInicioReal).toLocaleString('es-PE', { timeZone: 'America/Lima' }) : '—'}</td></tr></table><div style="margin:26px 0;text-align:center"><a href="${link}" style="background:${color};color:#fff;padding:12px 26px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Acceder al ciclo de pruebas</a></div><p style="font-size:13px;color:#64748b">Enlace: <a href="${link}" style="color:${color};word-break:break-all">${link}</a></p><p>Atentamente,<br><strong>Equipo de Aseguramiento de Calidad</strong></p><hr style="border:none;border-top:1px solid #d9e0e7"><p style="color:#6b7280;font-size:12px">Sistema QA — Notificación automática. Por favor, no responda este mensaje.</p></div></div>`;
   }
 
-  async cerrar(id: number, dto: CerrarCicloDto, usuarioId: number, usuarioNombre: string): Promise<any> {
+  async cerrar(id: number, dto: CerrarCicloDto, usuarioId: number, usuarioNombre: string, rol: Rol): Promise<any> {
+    await this.validarOperador(id, usuarioId, rol);
     const ciclo = await this.findOne(id);
     const casos = await this.getCasosDeCiclo(id);
     if (!casos.length) {
@@ -484,13 +506,14 @@ export class CiclosPruebaService {
     return { ...saved, resultadoGlobal, recomendacionQa: informe.recomendacionQa, conclusionQa: informe.conclusionQa, informeVersion: informe.version, informeId: informe.id, resumen };
   }
 
-  async listarInformes(cicloId: number): Promise<any[]> {
+  async listarInformes(cicloId: number, usuarioId?: number, esAdmin = true): Promise<any[]> {
+    await this.validarLecturaCiclo(cicloId, usuarioId, esAdmin);
     const informes = await this.informesRepo.find({ where: { cicloId }, relations: ['generador'], order: { version: 'DESC' } });
     return informes.map(i => ({ ...i, generadoPorNombre: i.generador ? `${i.generador.nombre} ${i.generador.apellido}` : null, generador: undefined }));
   }
 
-  async generarInformeWord(cicloId: number, informeId: number): Promise<{ buffer: Buffer; nombre: string }> {
-    const ciclo = await this.findOne(cicloId);
+  async generarInformeWord(cicloId: number, informeId: number, usuarioId?: number, esAdmin = true): Promise<{ buffer: Buffer; nombre: string }> {
+    const ciclo = await this.findOne(cicloId, usuarioId, esAdmin);
     const informe = await this.informesRepo.findOne({ where: { id: informeId, cicloId }, relations: ['generador'] });
     if (!informe) throw new NotFoundException('Informe de cierre no encontrado');
     const r: any = informe.resumen;

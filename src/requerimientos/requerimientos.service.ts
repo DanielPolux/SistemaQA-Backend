@@ -6,6 +6,7 @@ import { CreateRequerimientoDto } from './dto/create-requerimiento.dto';
 import { UpdateRequerimientoDto } from './dto/update-requerimiento.dto';
 import { QueryRequerimientoDto } from './dto/query-requerimiento.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
+import { assertProjectAccess } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class RequerimientosService {
@@ -62,12 +63,13 @@ export class RequerimientosService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const r = await this.requerimientosRepo.findOne({
       where: { id },
       relations: ['proyecto', 'creador'],
     });
     if (!r) throw new NotFoundException(`Requerimiento #${id} no encontrado`);
+    await assertProjectAccess(this.requerimientosRepo.manager, r.proyectoId, usuarioId, esAdmin);
 
     return {
       ...r,
@@ -78,7 +80,8 @@ export class RequerimientosService {
     };
   }
 
-  async findByProyecto(proyectoId: number): Promise<Requerimiento[]> {
+  async findByProyecto(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<Requerimiento[]> {
+    await assertProjectAccess(this.requerimientosRepo.manager, proyectoId, usuarioId, esAdmin);
     return this.requerimientosRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.creador', 'u')
@@ -87,7 +90,8 @@ export class RequerimientosService {
       .getMany();
   }
 
-  async nextCodigo(proyectoId: number, tipo?: string): Promise<{ codigo: string }> {
+  async nextCodigo(proyectoId: number, tipo?: string, usuarioId?: number, esAdmin = true): Promise<{ codigo: string }> {
+    await assertProjectAccess(this.requerimientosRepo.manager, proyectoId, usuarioId, esAdmin);
     const esNoFuncional = tipo === 'No Funcional';
     const prefijo = esNoFuncional ? 'RNF' : 'RF';
     const patron = esNoFuncional ? `^RNF-[0-9]+$` : `^RF-[0-9]+$`;

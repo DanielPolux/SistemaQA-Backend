@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Auditoria } from './entities/auditoria.entity';
+import { assertProjectAccess } from '../common/helpers/user-access.helper';
 
 export interface RegistroAuditoriaDto {
   entidad: string;
@@ -71,14 +72,18 @@ export class AuditoriaService {
     }
   }
 
-  async getByCasoPrueba(casoPruebaId: number): Promise<Auditoria[]> {
+  async getByCasoPrueba(casoPruebaId: number, usuarioId?: number, esAdmin = true): Promise<Auditoria[]> {
+    const [caso] = await this.repo.manager.query('SELECT proyecto_id FROM casos_prueba WHERE id=$1', [casoPruebaId]);
+    if (caso) await assertProjectAccess(this.repo.manager, caso.proyecto_id, usuarioId, esAdmin);
     return this.repo.find({
       where: { entidad: 'CasoPrueba', entidadId: casoPruebaId },
       order: { fecha: 'DESC' },
     });
   }
 
-  async getByDefecto(defectoId: number): Promise<Auditoria[]> {
+  async getByDefecto(defectoId: number, usuarioId?: number, esAdmin = true): Promise<Auditoria[]> {
+    const [defecto] = await this.repo.manager.query('SELECT proyecto_id FROM defectos WHERE id=$1', [defectoId]);
+    if (defecto) await assertProjectAccess(this.repo.manager, defecto.proyecto_id, usuarioId, esAdmin);
     return this.repo.find({
       where: { entidad: 'Defecto', entidadId: defectoId },
       order: { fecha: 'DESC' },

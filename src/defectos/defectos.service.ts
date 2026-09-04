@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +17,7 @@ import { userProjectFilter } from '../common/helpers/user-access.helper';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { DefectoWordService, EvidenciaArchivo } from './defecto-word.service';
 import { AsignarDefectosLoteDto } from './dto/asignar-defectos-lote.dto';
+import { assertProjectAccess } from '../common/helpers/user-access.helper';
 
 const CAMPOS_AUDIT_DEFECTO = ['titulo', 'descripcion', 'severidad', 'prioridad', 'asignadoA', 'estado'];
 
@@ -38,6 +39,22 @@ export class DefectosService {
     private config: ConfigService,
     private defectoWordService: DefectoWordService,
   ) {}
+
+  private async validarGestionProyecto(proyectoId: number, usuarioId: number, rol: Rol): Promise<void> {
+    if (rol === Rol.ADMIN || rol === Rol.QA_LEAD) return;
+    const [acceso] = await this.proyectosRepo.manager.query(
+      `SELECT CASE
+         WHEN $3='Project Manager' THEN p.jefe_proyecto_id=$2
+         WHEN $3='QA Tester' THEN EXISTS (
+           SELECT 1 FROM ciclos_prueba c WHERE c.proyecto_id=p.id
+             AND c.responsable_qa_id=$2 AND c.estado::text IN ('Planificado','En ejecución')
+         )
+         ELSE false END AS permitido
+       FROM proyectos p WHERE p.id=$1`,
+      [proyectoId, usuarioId, rol],
+    );
+    if (!acceso?.permitido) throw new ForbiddenException('No tienes permisos para gestionar información de este proyecto.');
+  }
 
   async findAll(query: QueryDefectoDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina = Number(query.pagina) || 1;
@@ -87,12 +104,13 @@ export class DefectosService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const d = await this.defectosRepo.findOne({
       where: { id },
       relations: ['proyecto', 'requerimiento', 'casoPrueba', 'casoPrueba.requerimiento', 'asignado', 'reportador', 'comentarios', 'comentarios.usuario'],
     });
     if (!d) throw new NotFoundException(`Defecto #${id} no encontrado`);
+    await assertProjectAccess(this.defectosRepo.manager, d.proyectoId, usuarioId, esAdmin);
 
     const comentarios = d.comentarios?.map((c) => ({
       id: c.id,
@@ -124,7 +142,12 @@ export class DefectosService {
     };
   }
 
-  async findByCasoPrueba(casoPruebaId: number): Promise<Defecto[]> {
+  async findByCasoPrueba(casoPruebaId: number, usuarioId?: number, esAdmin = true): Promise<Defecto[]> {
+    if (!esAdmin) {
+      const [caso] = await this.defectosRepo.manager.query('SELECT proyecto_id FROM casos_prueba WHERE id=$1', [casoPruebaId]);
+      if (!caso) throw new NotFoundException('Caso de prueba no encontrado.');
+      await assertProjectAccess(this.defectosRepo.manager, caso.proyecto_id, usuarioId, false);
+    }
     return this.defectosRepo
       .createQueryBuilder('d')
       .leftJoinAndSelect('d.asignado', 'a')
@@ -135,7 +158,8 @@ export class DefectosService {
       .getMany();
   }
 
-  async create(dto: CreateDefectoDto, reportadoPor: number, usuarioNombre?: string): Promise<Defecto> {
+  async create(dto: CreateDefectoDto, reportadoPor: number, usuarioNombre: string | undefined, rol: Rol = Rol.QA_TESTER): Promise<Defecto> {
+    await this.validarGestionProyecto(dto.proyectoId, reportadoPor, rol);
     const { ...fields } = dto as any;
     delete fields.codigo;
 
@@ -195,9 +219,11 @@ export class DefectosService {
     dto: UpdateDefectoDto,
     usuarioId?: number,
     usuarioNombre?: string,
+    rol: Rol = Rol.QA_TESTER,
   ): Promise<Defecto> {
     const defecto = await this.defectosRepo.findOne({ where: { id } });
     if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
+    await this.validarGestionProyecto(defecto.proyectoId, usuarioId!, rol);
 
     const asignadoAnterior = defecto.asignadoA;
 
@@ -248,7 +274,7 @@ export class DefectosService {
     return saved;
   }
 
-  async asignarLote(dto: AsignarDefectosLoteDto, usuarioId: number, usuarioNombre: string): Promise<{ asignados: number; correoEnviado: boolean }> {
+  async asignarLote(dto: AsignarDefectosLoteDto, usuarioId: number, usuarioNombre: string, rol: Rol): Promise<{ asignados: number; correoEnviado: boolean }> {
     const ids = [...new Set(dto.defectoIds)];
     const desarrollador = await this.usuariosRepo.findOne({ where: { id: dto.desarrolladorId } });
     if (!desarrollador || !desarrollador.activo || desarrollador.rol !== Rol.DEVELOPER) {
@@ -260,6 +286,7 @@ export class DefectosService {
     if (new Set(defectos.map(d => d.proyectoId)).size !== 1) {
       throw new BadRequestException('Todos los defectos deben pertenecer al mismo proyecto.');
     }
+    await this.validarGestionProyecto(defectos[0].proyectoId, usuarioId, rol);
     const noAsignables = defectos.filter(d => [EstadoDefecto.CERRADO, EstadoDefecto.RECHAZADO].includes(d.estado));
     if (noAsignables.length) {
       throw new BadRequestException(`No se pueden asignar defectos Cerrados o Rechazados: ${noAsignables.map(d => d.codigoProyecto ?? d.codigo).join(', ')}.`);
@@ -324,9 +351,11 @@ export class DefectosService {
     dto: CambiarEstadoDto,
     usuarioId: number,
     usuarioNombre?: string,
+    rol: Rol = Rol.QA_TESTER,
   ): Promise<Defecto> {
     const defecto = await this.defectosRepo.findOne({ where: { id } });
     if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
+    await this.validarGestionProyecto(defecto.proyectoId, usuarioId, rol);
 
     const estadoAnterior = defecto.estado;
     defecto.estado = dto.estado;
@@ -370,10 +399,10 @@ export class DefectosService {
     return saved;
   }
 
-  async agregarComentario(id: number, dto: CreateComentarioDto, usuarioId: number): Promise<ComentarioDefecto> {
+  async agregarComentario(id: number, dto: CreateComentarioDto, usuarioId: number, esAdmin = false): Promise<ComentarioDefecto> {
     const defecto = await this.defectosRepo.findOne({ where: { id } });
     if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
-
+    await assertProjectAccess(this.defectosRepo.manager, defecto.proyectoId, usuarioId, esAdmin);
     const comentario = this.comentariosRepo.create({ defectoId: id, usuarioId, comentario: dto.comentario });
     return this.comentariosRepo.save(comentario);
   }
@@ -384,9 +413,13 @@ export class DefectosService {
     comentariosDesarrollo?: string,
     usuarioId?: number,
     usuarioNombre?: string,
+    rol: Rol = Rol.DEVELOPER,
   ): Promise<Defecto> {
     const defecto = await this.defectosRepo.findOne({ where: { id } });
     if (!defecto) throw new NotFoundException(`Defecto #${id} no encontrado`);
+    if (rol !== Rol.ADMIN && defecto.asignadoA !== usuarioId) {
+      throw new ForbiddenException('Solo el desarrollador asignado puede actualizar este defecto.');
+    }
 
     const estadoAnterior = defecto.estadoDesarrollo;
     defecto.estadoDesarrollo = estadoDesarrollo;

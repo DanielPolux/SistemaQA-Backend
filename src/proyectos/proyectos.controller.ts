@@ -80,13 +80,13 @@ export class ProyectosController {
 
   @Get(':proyectoId/requerimientos')
   @ApiOperation({ summary: 'Listar todos los requerimientos de un proyecto' })
-  getRequerimientos(@Param('proyectoId') proyectoId: string) {
-    return this.requerimientosService.findByProyecto(+proyectoId);
+  getRequerimientos(@Param('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.requerimientosService.findByProyecto(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':proyectoId/casos-prueba')
   @ApiOperation({ summary: 'Listar todos los casos de prueba de un proyecto' })
-  getCasosPrueba(@Param('proyectoId') proyectoId: string) {
-    return this.casosPruebaService.findByProyecto(+proyectoId);
+  getCasosPrueba(@Param('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.findByProyecto(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 }

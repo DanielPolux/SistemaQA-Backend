@@ -11,7 +11,7 @@ import { ArchivoService } from './archivo.service';
 @ApiTags('Archivo de Proyecto')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Rol.ADMIN, Rol.PROJECT_MANAGER)
+@Roles(Rol.ADMIN)
 @Controller('proyectos/:id/archivo')
 export class ArchivoController {
   constructor(private readonly archivoService: ArchivoService) {}

@@ -11,7 +11,7 @@ import { PlanesPruebaService } from './planes-prueba.service';
 import { CreatePlanPruebaDto } from './dto/create-plan-prueba.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
-const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD, Rol.PROJECT_MANAGER];
+const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD];
 
 @ApiTags('Planes de Prueba')
 @ApiBearerAuth()
@@ -28,14 +28,14 @@ export class PlanesPruebaController {
 
   @Get(':id/trazabilidad')
   @ApiOperation({ summary: 'Matriz de trazabilidad del plan' })
-  getTrazabilidad(@Param('id') id: string) {
-    return this.service.getTrazabilidad(+id);
+  getTrazabilidad(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.getTrazabilidad(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener plan por ID con ciclos' })
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()

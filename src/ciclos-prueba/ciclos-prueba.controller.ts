@@ -15,7 +15,8 @@ import { QueryCicloPruebaDto } from './dto/query-ciclo-prueba.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 import { CerrarCicloDto } from './dto/cerrar-ciclo.dto';
 
-const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
+const ROLES_GESTION = [Rol.ADMIN, Rol.QA_LEAD];
+const ROLES_OPERACION = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 
 @ApiTags('Ciclos de Prueba')
 @ApiBearerAuth()
@@ -32,30 +33,30 @@ export class CiclosPruebaController {
 
   @Get('activo/:proyectoId')
   @ApiOperation({ summary: 'Obtener ciclo activo de un proyecto' })
-  findActivo(@Param('proyectoId') proyectoId: string) {
-    return this.service.findActivoByProyecto(+proyectoId);
+  findActivo(@Param('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.service.findActivoByProyecto(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get('casos-previos/:proyectoId')
   @ApiOperation({ summary: 'Casos con último resultado para planificar nuevo ciclo' })
-  getCasosPrevios(@Param('proyectoId') proyectoId: string) {
-    return this.service.getCasosPrevios(+proyectoId);
+  getCasosPrevios(@Param('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.service.getCasosPrevios(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id/casos')
   @ApiOperation({ summary: 'Casos de prueba del ciclo con resultado en este ciclo' })
-  getCasosDeCiclo(@Param('id') id: string) {
-    return this.service.getCasosDeCiclo(+id);
+  getCasosDeCiclo(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.getCasosDeCiclo(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id/informes')
-  listarInformes(@Param('id') id: string) {
-    return this.service.listarInformes(+id);
+  listarInformes(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.listarInformes(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id/informes/:informeId/word')
-  async descargarInforme(@Param('id') id: string, @Param('informeId') informeId: string, @Res() res: Response) {
-    const archivo = await this.service.generarInformeWord(+id, +informeId);
+  async descargarInforme(@Param('id') id: string, @Param('informeId') informeId: string, @CurrentUser() user: Usuario, @Res() res: Response) {
+    const archivo = await this.service.generarInformeWord(+id, +informeId, user.id, user.rol === Rol.ADMIN);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${archivo.nombre}"`);
     res.send(archivo.buffer);
@@ -63,8 +64,8 @@ export class CiclosPruebaController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener ciclo por ID' })
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.service.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()
@@ -85,18 +86,18 @@ export class CiclosPruebaController {
 
   @Patch(':id/cerrar')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_GESTION)
+  @Roles(...ROLES_OPERACION)
   @ApiOperation({ summary: 'Cerrar ciclo de prueba' })
   cerrar(@Param('id') id: string, @Body() dto: CerrarCicloDto, @CurrentUser() user: Usuario) {
-    return this.service.cerrar(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.service.cerrar(+id, dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Patch(':id/iniciar')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_GESTION)
+  @Roles(...ROLES_OPERACION)
   @ApiOperation({ summary: 'Registrar el inicio real del ciclo de prueba' })
   iniciar(@Param('id') id: string, @CurrentUser() user: Usuario) {
-    return this.service.iniciar(+id, user.id, `${user.nombre} ${user.apellido}`);
+    return this.service.iniciar(+id, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Patch(':id/reabrir')

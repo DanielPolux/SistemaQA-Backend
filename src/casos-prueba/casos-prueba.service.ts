@@ -9,7 +9,7 @@ import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
 import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
-import { userProjectFilter } from '../common/helpers/user-access.helper';
+import { assertProjectAccess, userProjectFilter } from '../common/helpers/user-access.helper';
 import { Rol } from '../usuarios/entities/usuario.entity';
 
 const CAMPOS_AUDIT = [
@@ -82,16 +82,18 @@ export class CasosPruebaService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const c = await this.casosRepo.findOne({
       where: { id },
       relations: ['proyecto', 'requerimiento', 'responsableQa', 'creador'],
     });
     if (!c) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+    await assertProjectAccess(this.casosRepo.manager, c.proyectoId, usuarioId, esAdmin);
     return this.mapCaso(c);
   }
 
-  async findByProyecto(proyectoId: number): Promise<CasoPrueba[]> {
+  async findByProyecto(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<CasoPrueba[]> {
+    await assertProjectAccess(this.casosRepo.manager, proyectoId, usuarioId, esAdmin);
     return this.casosRepo
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.requerimiento', 'r')
@@ -101,7 +103,8 @@ export class CasosPruebaService {
       .getMany();
   }
 
-  async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
+  async nextCodigo(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<{ codigo: string }> {
+    await assertProjectAccess(this.casosRepo.manager, proyectoId, usuarioId, esAdmin);
     const [{ max_num }] = await this.casosRepo.manager.query(
       `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
        FROM casos_prueba

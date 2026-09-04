@@ -43,14 +43,14 @@ export class CasosPruebaController {
 
   @Get('next-codigo')
   @ApiOperation({ summary: 'Previsualizar el próximo código CP para un proyecto' })
-  nextCodigo(@Query('proyectoId') proyectoId: string) {
-    return this.casosPruebaService.nextCodigo(+proyectoId);
+  nextCodigo(@Query('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.nextCodigo(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener caso de prueba por ID' })
-  findOne(@Param('id') id: string) {
-    return this.casosPruebaService.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()
@@ -96,7 +96,7 @@ export class CasosPruebaController {
 
   @Get(':casoPruebaId/defectos')
   @ApiOperation({ summary: 'Listar todos los defectos de un caso de prueba' })
-  getDefectos(@Param('casoPruebaId') casoPruebaId: string) {
-    return this.defectosService.findByCasoPrueba(+casoPruebaId);
+  getDefectos(@Param('casoPruebaId') casoPruebaId: string, @CurrentUser() user: Usuario) {
+    return this.defectosService.findByCasoPrueba(+casoPruebaId, user.id, user.rol === Rol.ADMIN);
   }
 }

@@ -12,6 +12,9 @@ import { randomUUID } from 'crypto';
 import { basename, extname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Rol } from '../usuarios/entities/usuario.entity';
 import { UPLOADS_ROOT } from './uploads.constants';
 
 // Tipos de evidencia aceptados: capturas, video corto, logs, PDF.
@@ -30,7 +33,8 @@ const MIME_PERMITIDOS = new Set([
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 @Controller('uploads')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER)
 export class UploadsController {
   @Post()
   @UseInterceptors(
