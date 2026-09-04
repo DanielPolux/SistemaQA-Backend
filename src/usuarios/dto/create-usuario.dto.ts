@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Rol } from '../entities/usuario.entity';
 
@@ -12,6 +12,12 @@ export class CreateUsuarioDto {
   @IsString()
   @IsNotEmpty()
   apellido: string;
+
+  @ApiProperty({ example: 'jperez' })
+  @IsString()
+  @MinLength(3)
+  @Matches(/^[a-zA-Z0-9]+$/, { message: 'El usuario solo puede contener letras y números' })
+  username: string;
 
   @ApiProperty()
   @IsEmail()

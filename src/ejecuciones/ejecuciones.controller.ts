@@ -22,7 +22,7 @@ export class EjecucionesController {
   @ApiOperation({ summary: 'Registrar una ejecución de caso de prueba (con defecto inline si resultado es Fallido)' })
   create(@Body() dto: CreateEjecucionDto, @CurrentUser() user: any) {
     const nombre = user ? `${user.nombre} ${user.apellido}` : undefined;
-    return this.service.create(dto, user?.id, nombre);
+    return this.service.create(dto, user.id, nombre, user.rol);
   }
 
   @Get()
@@ -33,7 +33,7 @@ export class EjecucionesController {
 
   @Get('caso-prueba/:id')
   @ApiOperation({ summary: 'Historial de ejecuciones de un caso de prueba' })
-  findByCasoPrueba(@Param('id', ParseIntPipe) id: number, @Query('cicloId') cicloId?: string) {
-    return this.service.findByCasoPrueba(id, cicloId ? Number(cicloId) : undefined);
+  findByCasoPrueba(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: Usuario, @Query('cicloId') cicloId?: string) {
+    return this.service.findByCasoPrueba(id, cicloId ? Number(cicloId) : undefined, user.id, user.rol === Rol.ADMIN);
   }
 }

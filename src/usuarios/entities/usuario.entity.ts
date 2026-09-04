@@ -22,6 +22,9 @@ export class Usuario {
   @Column({ length: 100 })
   apellido: string;
 
+  @Column({ unique: true, length: 50 })
+  username: string;
+
   @Column({ unique: true, length: 255 })
   email: string;
 

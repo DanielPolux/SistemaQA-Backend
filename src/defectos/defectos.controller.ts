@@ -28,9 +28,10 @@ import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 // Solo QA puede reportar (crear) defectos
 const ROLES_CREAR      = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
 // QA y PM pueden editar defectos (PM para asignar desarrollador)
-const ROLES_EDITAR     = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER, Rol.PROJECT_MANAGER];
-// Todos pueden cambiar el estado del defecto (cerrar, reabrir, etc.)
-const ROLES_ESTADO     = [Rol.ADMIN, Rol.PROJECT_MANAGER, Rol.DEVELOPER, Rol.QA_LEAD, Rol.QA_TESTER];
+const ROLES_EDITAR     = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
+// QA revisa la respuesta y el desarrollador asignado puede iniciar la atención.
+// El servicio restringe las transiciones permitidas para cada rol.
+const ROLES_ESTADO     = [Rol.ADMIN, Rol.DEVELOPER, Rol.QA_LEAD, Rol.QA_TESTER];
 // Solo el desarrollador (y admin) actualiza el estado de desarrollo (Atendido/No Aplica)
 const ROLES_ESTADO_DEV = [Rol.ADMIN, Rol.DEVELOPER];
 
@@ -55,8 +56,8 @@ export class DefectosController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener defecto por ID (incluye comentarios)' })
-  findOne(@Param('id') id: string) {
-    return this.defectosService.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.defectosService.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()
@@ -64,7 +65,7 @@ export class DefectosController {
   @Roles(...ROLES_CREAR)
   @ApiOperation({ summary: 'Crear nuevo defecto' })
   create(@Body() dto: CreateDefectoDto, @CurrentUser() user: Usuario) {
-    return this.defectosService.create(dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.defectosService.create(dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Patch('asignacion-lote')
@@ -72,7 +73,7 @@ export class DefectosController {
   @Roles(Rol.ADMIN, Rol.QA_LEAD, Rol.PROJECT_MANAGER)
   @ApiOperation({ summary: 'Asignar varios defectos del mismo proyecto a un desarrollador' })
   asignarLote(@Body() dto: AsignarDefectosLoteDto, @CurrentUser() user: Usuario) {
-    return this.defectosService.asignarLote(dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.defectosService.asignarLote(dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Put(':id')
@@ -80,7 +81,7 @@ export class DefectosController {
   @Roles(...ROLES_EDITAR)
   @ApiOperation({ summary: 'Actualizar defecto' })
   update(@Param('id') id: string, @Body() dto: UpdateDefectoDto, @CurrentUser() user: Usuario) {
-    return this.defectosService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.defectosService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Patch(':id/estado')
@@ -92,7 +93,7 @@ export class DefectosController {
     @Body() dto: CambiarEstadoDto,
     @CurrentUser() user: Usuario,
   ) {
-    return this.defectosService.cambiarEstado(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.defectosService.cambiarEstado(+id, dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Patch(':id/estado-desarrollo')
@@ -106,6 +107,7 @@ export class DefectosController {
   ) {
     return this.defectosService.actualizarEstadoDesarrollo(
       +id, dto.estadoDesarrollo, dto.comentariosDesarrollo, user.id, `${user.nombre} ${user.apellido}`,
+      user.rol,
     );
   }
 
@@ -116,12 +118,12 @@ export class DefectosController {
     @Body() dto: CreateComentarioDto,
     @CurrentUser() user: Usuario,
   ) {
-    return this.defectosService.agregarComentario(+id, dto, user.id);
+    return this.defectosService.agregarComentario(+id, dto, user.id, user.rol === Rol.ADMIN);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(...ROLES_EDITAR)
+  @Roles(Rol.ADMIN, Rol.QA_LEAD)
   @ApiOperation({ summary: 'Eliminar defecto' })
   remove(@Param('id') id: string) {
     return this.defectosService.remove(+id);

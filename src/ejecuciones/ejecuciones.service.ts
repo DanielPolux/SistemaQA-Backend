@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { EjecucionCasoPrueba, ResultadoEjecucion } from './entities/ejecucion-caso-prueba.entity';
@@ -9,7 +9,8 @@ import { QueryEjecucionDto } from './dto/query-ejecucion.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { DefectosService } from '../defectos/defectos.service';
-import { userProjectFilter } from '../common/helpers/user-access.helper';
+import { assertProjectAccess, userProjectFilter } from '../common/helpers/user-access.helper';
+import { Rol } from '../usuarios/entities/usuario.entity';
 
 @Injectable()
 export class EjecucionesService {
@@ -25,7 +26,10 @@ export class EjecucionesService {
     private defectosService: DefectosService,
   ) {}
 
-  private async validarPrecondicionesEjecucion(casoPruebaId: number, proyectoId: number, cicloId?: number): Promise<void> {
+  private async validarPrecondicionesEjecucion(
+    casoPruebaId: number, proyectoId: number, cicloId: number | undefined,
+    usuarioId: number, rol: Rol,
+  ): Promise<void> {
     // ── 1. Proyecto: debe existir y estar En Ejecución ───────────────────────
     const [proyecto] = await this.dataSource.manager.query(
       'SELECT id, estado FROM proyectos WHERE id = $1',
@@ -42,11 +46,14 @@ export class EjecucionesService {
 
     // ── 2. Caso de prueba: debe existir ──────────────────────────────────────
     const [casoPrueba] = await this.dataSource.manager.query(
-      'SELECT id, requerimiento_id FROM casos_prueba WHERE id = $1',
+      'SELECT id, requerimiento_id, proyecto_id FROM casos_prueba WHERE id = $1',
       [casoPruebaId],
     );
     if (!casoPrueba) {
       throw new BadRequestException('El caso de prueba no existe o fue eliminado.');
+    }
+    if (casoPrueba.proyecto_id !== proyectoId) {
+      throw new BadRequestException('El caso de prueba no pertenece al proyecto indicado.');
     }
 
     // ── 3. Requerimiento: si está vinculado, debe existir y estar Aprobado ───
@@ -68,11 +75,11 @@ export class EjecucionesService {
     // ── 4. Ciclo: debe existir ────────────────────────────────────────────────
     const [ciclo] = cicloId
       ? await this.dataSource.manager.query(
-          'SELECT id, nombre, plan_prueba_id FROM ciclos_prueba WHERE id = $1',
+          'SELECT id, nombre, plan_prueba_id, proyecto_id, responsable_qa_id, estado FROM ciclos_prueba WHERE id = $1',
           [cicloId],
         )
       : await this.dataSource.manager.query(
-          `SELECT id, nombre, plan_prueba_id FROM ciclos_prueba
+          `SELECT id, nombre, plan_prueba_id, proyecto_id, responsable_qa_id, estado FROM ciclos_prueba
            WHERE proyecto_id = $1 AND estado = 'En ejecución'
            ORDER BY creado_en DESC LIMIT 1`,
           [proyectoId],
@@ -84,6 +91,21 @@ export class EjecucionesService {
           ? 'El ciclo de prueba no existe o fue eliminado.'
           : 'No hay un ciclo de prueba activo para este proyecto.',
       );
+    }
+    if (ciclo.proyecto_id !== proyectoId || ciclo.estado !== EstadoCiclo.EN_EJECUCION) {
+      throw new BadRequestException('El ciclo no pertenece al proyecto o no está en ejecución.');
+    }
+    if (rol === Rol.QA_TESTER && ciclo.responsable_qa_id !== usuarioId) {
+      throw new ForbiddenException('Solo puedes ejecutar casos del ciclo que tienes asignado.');
+    }
+    const [seleccion] = await this.dataSource.manager.query(
+      `SELECT
+        EXISTS (SELECT 1 FROM ciclo_casos_planificados WHERE ciclo_id=$1) AS usa_seleccion,
+        EXISTS (SELECT 1 FROM ciclo_casos_planificados WHERE ciclo_id=$1 AND caso_prueba_id=$2) AS incluido`,
+      [ciclo.id, casoPruebaId],
+    );
+    if (seleccion?.usa_seleccion && !seleccion.incluido) {
+      throw new BadRequestException('El caso de prueba no forma parte del alcance del ciclo.');
     }
 
     // ── 5. Plan: el ciclo debe tener un plan vinculado que exista ────────────
@@ -103,8 +125,8 @@ export class EjecucionesService {
     }
   }
 
-  async create(dto: CreateEjecucionDto, reportadoPor?: number, usuarioNombre?: string): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
-    await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId);
+  async create(dto: CreateEjecucionDto, reportadoPor: number, usuarioNombre: string | undefined, rol: Rol): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
+    await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId, reportadoPor, rol);
 
     const { defectoData, ...ejecucionFields } = dto;
     if (ejecucionFields.resultado === ResultadoEjecucion.BLOQUEADO) {
@@ -252,7 +274,10 @@ export class EjecucionesService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findByCasoPrueba(casoPruebaId: number, cicloId?: number): Promise<any[]> {
+  async findByCasoPrueba(casoPruebaId: number, cicloId?: number, usuarioId?: number, esAdmin = true): Promise<any[]> {
+    const [caso] = await this.repo.manager.query('SELECT proyecto_id FROM casos_prueba WHERE id=$1', [casoPruebaId]);
+    if (!caso) throw new BadRequestException('El caso de prueba no existe.');
+    await assertProjectAccess(this.repo.manager, caso.proyecto_id, usuarioId, esAdmin);
     const qb = this.repo
       .createQueryBuilder('e')
       .leftJoin('e.casoPrueba',    'cp').addSelect(['cp.codigo', 'cp.nombre', 'cp.descripcion'])

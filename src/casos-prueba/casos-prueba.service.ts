@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CasoPrueba } from './entities/caso-prueba.entity';
@@ -9,7 +9,8 @@ import { QueryCasoPruebaDto } from './dto/query-caso-prueba.dto';
 import { ImportarCasosPruebaDto } from './dto/importar-casos-prueba.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
-import { userProjectFilter } from '../common/helpers/user-access.helper';
+import { assertProjectAccess, userProjectFilter } from '../common/helpers/user-access.helper';
+import { Rol } from '../usuarios/entities/usuario.entity';
 
 const CAMPOS_AUDIT = [
   'nombre', 'codigo', 'tipo', 'descripcion', 'resultadoEsperado',
@@ -25,6 +26,23 @@ export class CasosPruebaService {
     private defectosRepo: Repository<Defecto>,
     private auditoriaService: AuditoriaService,
   ) {}
+
+  private async validarGestionProyecto(proyectoId: number, usuarioId: number, rol: Rol): Promise<void> {
+    if (rol === Rol.ADMIN || rol === Rol.QA_LEAD) return;
+    const [acceso] = await this.casosRepo.manager.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM ciclos_prueba
+         WHERE proyecto_id=$1 AND responsable_qa_id=$2
+           AND estado::text IN ('Planificado','En ejecución')
+       ) AS permitido`,
+      [proyectoId, usuarioId],
+    );
+    if (!acceso?.permitido) {
+      throw new ForbiddenException(
+        'Solo puedes administrar casos de prueba de un proyecto con un ciclo activo asignado.',
+      );
+    }
+  }
 
   async findAll(query: QueryCasoPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
     const pagina    = Number(query.pagina)    || 1;
@@ -64,16 +82,18 @@ export class CasosPruebaService {
     return new PaginatedResponseDto(datos, total, pagina, porPagina);
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const c = await this.casosRepo.findOne({
       where: { id },
       relations: ['proyecto', 'requerimiento', 'responsableQa', 'creador'],
     });
     if (!c) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+    await assertProjectAccess(this.casosRepo.manager, c.proyectoId, usuarioId, esAdmin);
     return this.mapCaso(c);
   }
 
-  async findByProyecto(proyectoId: number): Promise<CasoPrueba[]> {
+  async findByProyecto(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<CasoPrueba[]> {
+    await assertProjectAccess(this.casosRepo.manager, proyectoId, usuarioId, esAdmin);
     return this.casosRepo
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.requerimiento', 'r')
@@ -83,7 +103,8 @@ export class CasosPruebaService {
       .getMany();
   }
 
-  async nextCodigo(proyectoId: number): Promise<{ codigo: string }> {
+  async nextCodigo(proyectoId: number, usuarioId?: number, esAdmin = true): Promise<{ codigo: string }> {
+    await assertProjectAccess(this.casosRepo.manager, proyectoId, usuarioId, esAdmin);
     const [{ max_num }] = await this.casosRepo.manager.query(
       `SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_cp FROM 3) AS INTEGER)), 0) AS max_num
        FROM casos_prueba
@@ -93,7 +114,8 @@ export class CasosPruebaService {
     return { codigo: `CP${String(Number(max_num) + 1).padStart(3, '0')}` };
   }
 
-  async create(dto: CreateCasoPruebaDto, creadoPor: number, usuarioNombre?: string): Promise<CasoPrueba> {
+  async create(dto: CreateCasoPruebaDto, creadoPor: number, usuarioNombre?: string, rol: Rol = Rol.QA_TESTER): Promise<CasoPrueba> {
+    await this.validarGestionProyecto(dto.proyectoId, creadoPor, rol);
     let codigo: string;
     if (dto.codigo?.trim()) {
       codigo = dto.codigo.trim();
@@ -136,9 +158,11 @@ export class CasosPruebaService {
     dto: UpdateCasoPruebaDto,
     usuarioId?: number,
     usuarioNombre?: string,
+    rol: Rol = Rol.QA_TESTER,
   ): Promise<CasoPrueba> {
     const caso = await this.casosRepo.findOne({ where: { id } });
     if (!caso) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+    await this.validarGestionProyecto(dto.proyectoId ?? caso.proyectoId, usuarioId!, rol);
 
     const anterior: Record<string, any> = {};
     for (const campo of CAMPOS_AUDIT) {
@@ -160,9 +184,10 @@ export class CasosPruebaService {
     return saved;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, usuarioId: number, rol: Rol): Promise<void> {
     const caso = await this.casosRepo.findOne({ where: { id } });
     if (!caso) throw new NotFoundException(`Caso de prueba #${id} no encontrado`);
+    await this.validarGestionProyecto(caso.proyectoId, usuarioId, rol);
 
     const totalDefectos = await this.defectosRepo.count({ where: { casoPruebaId: id } });
     if (totalDefectos > 0)
@@ -173,13 +198,14 @@ export class CasosPruebaService {
     await this.casosRepo.remove(caso);
   }
 
-  async removeMany(ids: number[]): Promise<{ eliminados: number[]; bloqueados: { id: number; nombre: string; motivo: string }[] }> {
+  async removeMany(ids: number[], usuarioId: number, rol: Rol): Promise<{ eliminados: number[]; bloqueados: { id: number; nombre: string; motivo: string }[] }> {
     const eliminados: number[] = [];
     const bloqueados: { id: number; nombre: string; motivo: string }[] = [];
 
     for (const id of ids) {
       const caso = await this.casosRepo.findOne({ where: { id } });
       if (!caso) { bloqueados.push({ id, nombre: `#${id}`, motivo: 'No encontrado' }); continue; }
+      await this.validarGestionProyecto(caso.proyectoId, usuarioId, rol);
 
       const totalDefectos = await this.defectosRepo.count({ where: { casoPruebaId: id } });
       if (totalDefectos > 0) {
@@ -198,6 +224,7 @@ export class CasosPruebaService {
     dto: ImportarCasosPruebaDto,
     creadoPor: number,
     usuarioNombre?: string,
+    rol: Rol = Rol.QA_TESTER,
   ): Promise<{ importados: number; errores: { fila: number; mensaje: string }[] }> {
     let importados = 0;
     const errores: { fila: number; mensaje: string }[] = [];
@@ -232,7 +259,7 @@ export class CasosPruebaService {
       }
 
       try {
-        await this.create(caso, creadoPor, usuarioNombre);
+        await this.create(caso, creadoPor, usuarioNombre, rol);
         importados++;
       } catch (e: any) {
         errores.push({ fila: i + 1, mensaje: e?.message ?? 'Error desconocido' });

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlanPrueba, EstadoPlan } from './entities/plan-prueba.entity';
 import { CreatePlanPruebaDto, CasoSeleccionDto } from './dto/create-plan-prueba.dto';
-import { userProjectFilter } from '../common/helpers/user-access.helper';
+import { assertProjectAccess, userProjectFilter } from '../common/helpers/user-access.helper';
 
 @Injectable()
 export class PlanesPruebaService {
@@ -60,12 +60,13 @@ export class PlanesPruebaService {
     return { datos, total, pagina, porPagina };
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const p = await this.repo.findOne({
       where: { id },
       relations: ['proyecto', 'responsable'],
     });
     if (!p) throw new NotFoundException(`Plan #${id} no encontrado`);
+    await assertProjectAccess(this.repo.manager, p.proyectoId, usuarioId, esAdmin);
 
     const [ciclos, requerimientos] = await Promise.all([
       this.repo.manager.query(
@@ -292,9 +293,10 @@ export class PlanesPruebaService {
     );
   }
 
-  async getTrazabilidad(planId: number): Promise<any> {
+  async getTrazabilidad(planId: number, usuarioId?: number, esAdmin = true): Promise<any> {
     const plan = await this.repo.findOne({ where: { id: planId } });
     if (!plan) throw new NotFoundException(`Plan #${planId} no encontrado`);
+    await assertProjectAccess(this.repo.manager, plan.proyectoId, usuarioId, esAdmin);
 
     const rows: any[] = await this.repo.manager.query(
       `SELECT

@@ -43,14 +43,14 @@ export class CasosPruebaController {
 
   @Get('next-codigo')
   @ApiOperation({ summary: 'Previsualizar el próximo código CP para un proyecto' })
-  nextCodigo(@Query('proyectoId') proyectoId: string) {
-    return this.casosPruebaService.nextCodigo(+proyectoId);
+  nextCodigo(@Query('proyectoId') proyectoId: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.nextCodigo(+proyectoId, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener caso de prueba por ID' })
-  findOne(@Param('id') id: string) {
-    return this.casosPruebaService.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()
@@ -58,7 +58,7 @@ export class CasosPruebaController {
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Crear nuevo caso de prueba' })
   create(@Body() dto: CreateCasoPruebaDto, @CurrentUser() user: Usuario) {
-    return this.casosPruebaService.create(dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.casosPruebaService.create(dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Post('importar')
@@ -66,7 +66,7 @@ export class CasosPruebaController {
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Importar casos de prueba desde Excel (bulk)' })
   importar(@Body() dto: ImportarCasosPruebaDto, @CurrentUser() user: Usuario) {
-    return this.casosPruebaService.importar(dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.casosPruebaService.importar(dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Put(':id')
@@ -74,7 +74,7 @@ export class CasosPruebaController {
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Actualizar caso de prueba' })
   update(@Param('id') id: string, @Body() dto: UpdateCasoPruebaDto, @CurrentUser() user: Usuario) {
-    return this.casosPruebaService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`);
+    return this.casosPruebaService.update(+id, dto, user.id, `${user.nombre} ${user.apellido}`, user.rol);
   }
 
   @Delete('bulk')
@@ -82,21 +82,21 @@ export class CasosPruebaController {
   @UseGuards(RolesGuard)
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Eliminar múltiples casos de prueba' })
-  removeMany(@Body() body: { ids: number[] }) {
-    return this.casosPruebaService.removeMany(body.ids);
+  removeMany(@Body() body: { ids: number[] }, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.removeMany(body.ids, user.id, user.rol);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(...ROLES_ESCRITURA)
   @ApiOperation({ summary: 'Eliminar caso de prueba' })
-  remove(@Param('id') id: string) {
-    return this.casosPruebaService.remove(+id);
+  remove(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.casosPruebaService.remove(+id, user.id, user.rol);
   }
 
   @Get(':casoPruebaId/defectos')
   @ApiOperation({ summary: 'Listar todos los defectos de un caso de prueba' })
-  getDefectos(@Param('casoPruebaId') casoPruebaId: string) {
-    return this.defectosService.findByCasoPrueba(+casoPruebaId);
+  getDefectos(@Param('casoPruebaId') casoPruebaId: string, @CurrentUser() user: Usuario) {
+    return this.defectosService.findByCasoPrueba(+casoPruebaId, user.id, user.rol === Rol.ADMIN);
   }
 }

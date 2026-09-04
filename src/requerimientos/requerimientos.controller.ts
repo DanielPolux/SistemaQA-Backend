@@ -20,7 +20,7 @@ import { UpdateRequerimientoDto } from './dto/update-requerimiento.dto';
 import { QueryRequerimientoDto } from './dto/query-requerimiento.dto';
 import { Rol, Usuario } from '../usuarios/entities/usuario.entity';
 
-const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD, Rol.QA_TESTER];
+const ROLES_ESCRITURA = [Rol.ADMIN, Rol.QA_LEAD];
 
 @ApiTags('Requerimientos')
 @ApiBearerAuth()
@@ -37,14 +37,14 @@ export class RequerimientosController {
 
   @Get('next-codigo')
   @ApiOperation({ summary: 'Previsualizar el próximo código RF/RNF para un proyecto' })
-  nextCodigo(@Query('proyectoId') proyectoId: string, @Query('tipo') tipo?: string) {
-    return this.requerimientosService.nextCodigo(+proyectoId, tipo);
+  nextCodigo(@Query('proyectoId') proyectoId: string, @CurrentUser() user: Usuario, @Query('tipo') tipo?: string) {
+    return this.requerimientosService.nextCodigo(+proyectoId, tipo, user.id, user.rol === Rol.ADMIN);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener requerimiento por ID' })
-  findOne(@Param('id') id: string) {
-    return this.requerimientosService.findOne(+id);
+  findOne(@Param('id') id: string, @CurrentUser() user: Usuario) {
+    return this.requerimientosService.findOne(+id, user.id, user.rol === Rol.ADMIN);
   }
 
   @Post()

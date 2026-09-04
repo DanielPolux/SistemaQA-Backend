@@ -18,7 +18,7 @@ export class AuthService {
     const usuario = await this.usuariosRepository
       .createQueryBuilder('u')
       .addSelect('u.password')
-      .where('u.email = :email', { email: loginDto.email })
+      .where('u.username = :username', { username: loginDto.username })
       .andWhere('u.activo = :activo', { activo: true })
       .getOne();
 
@@ -27,7 +27,7 @@ export class AuthService {
     const passwordValido = await bcrypt.compare(loginDto.password, usuario.password);
     if (!passwordValido) throw new UnauthorizedException('Credenciales inválidas');
 
-    const payload = { sub: usuario.id, email: usuario.email };
+    const payload = { sub: usuario.id, username: usuario.username };
     const token = this.jwtService.sign(payload);
 
     const { password, ...usuarioSinPassword } = usuario;

@@ -10,6 +10,7 @@ const mockUsuario = {
   id: 1,
   nombre: 'Admin',
   apellido: 'QA',
+  username: 'admin',
   email: 'admin@qa.com',
   password: 'hashed_password',
   rol: 'Administrador',
@@ -50,7 +51,7 @@ describe('AuthService', () => {
     jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
     qb.getOne.mockResolvedValue(mockUsuario);
 
-    const result = await service.login({ email: 'admin@qa.com', password: '123456' });
+    const result = await service.login({ username: 'admin', password: '123456' });
 
     expect(result.token).toBe('mock_token');
     expect(result.usuario).not.toHaveProperty('password');
@@ -61,7 +62,7 @@ describe('AuthService', () => {
     qb.getOne.mockResolvedValue(null);
 
     await expect(
-      service.login({ email: 'noexiste@qa.com', password: '123456' }),
+      service.login({ username: 'noexiste', password: '123456' }),
     ).rejects.toThrow(UnauthorizedException);
   });
 
@@ -70,7 +71,7 @@ describe('AuthService', () => {
     qb.getOne.mockResolvedValue(mockUsuario);
 
     await expect(
-      service.login({ email: 'admin@qa.com', password: 'wrongpass' }),
+      service.login({ username: 'admin', password: 'wrongpass' }),
     ).rejects.toThrow(UnauthorizedException);
   });
 });
