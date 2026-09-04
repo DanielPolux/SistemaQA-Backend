@@ -10,6 +10,7 @@ import { InformeCierreCiclo } from './entities/informe-cierre-ciclo.entity';
 import { CerrarCicloDto } from './dto/cerrar-ciclo.dto';
 import { MailService } from '../mail/mail.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { ConfigService } from '@nestjs/config';
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from 'docx';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class CiclosPruebaService {
     private informesRepo: Repository<InformeCierreCiclo>,
     private mailService: MailService,
     private auditoriaService: AuditoriaService,
+    private config: ConfigService,
   ) {}
 
   async findAll(query: QueryCicloPruebaDto, usuarioId?: number, esAdmin = true): Promise<PaginatedResponseDto<any>> {
@@ -277,7 +279,7 @@ export class CiclosPruebaService {
       estado: EstadoCiclo.ACTIVO,
     });
     const saved = await this.repo.save(ciclo);
-    void this.enviarAsignacionResponsable(saved).catch(() => undefined);
+    void this.enviarAsignacionResponsable(saved, false).catch(() => undefined);
 
     // Auto-advance linked plan state to 'En ejecución'
     if (saved.planPruebaId) {
@@ -311,24 +313,69 @@ export class CiclosPruebaService {
     Object.assign(ciclo, dto);
     const saved = await this.repo.save(ciclo);
     if (dto.responsableQaId && dto.responsableQaId !== responsableAnterior) {
-      void this.enviarAsignacionResponsable(saved).catch(() => undefined);
+      void this.enviarAsignacionResponsable(saved, true).catch(() => undefined);
     }
     return saved;
   }
 
-  private async enviarAsignacionResponsable(ciclo: CicloPrueba): Promise<void> {
+  private async enviarAsignacionResponsable(ciclo: CicloPrueba, esReasignacion: boolean): Promise<void> {
     const [datos] = await this.repo.manager.query(
-      `SELECT u.email, u.nombre, p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre
+      `SELECT u.email, u.nombre, u.apellido,
+              p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre,
+              jq.email AS jefe_qa_email
        FROM usuarios u
        JOIN proyectos p ON p.id = $2
+       LEFT JOIN usuarios jq ON jq.id = p.jefe_qa_id
        WHERE u.id = $1`,
       [ciclo.responsableQaId, ciclo.proyectoId],
     );
     if (!datos?.email) return;
+    const color = '#2D4F72';
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:4200').replace(/\/$/, '');
+    const linkCiclo = `${frontendUrl}/ciclos/${ciclo.id}/ejecutar`;
+    const titulo = esReasignacion ? 'Reasignación de ciclo de pruebas' : 'Asignación de ciclo de pruebas';
+    const filas: [string, string][] = [
+      ['Proyecto', `${datos.proyecto_codigo} - ${datos.proyecto_nombre}`],
+      ['Ciclo de pruebas', ciclo.nombre],
+      ['Plan de pruebas', ciclo.planNombre ?? 'Sin plan asignado'],
+      ['Ambiente', ciclo.ambiente ?? '—'],
+      ['Estado', ciclo.estado],
+      ['Fecha de inicio', ciclo.fechaInicio ? String(ciclo.fechaInicio) : '—'],
+      ['Fecha de fin estimada', ciclo.fechaFin ? String(ciclo.fechaFin) : '—'],
+    ];
+    const tableRows = filas.map(([label, value], i) => `
+      <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f6f8fb'}">
+        <td style="padding:9px 10px;border:1px solid #d9e0e7;font-weight:600;width:32%;color:#334155">${label}</td>
+        <td style="padding:9px 10px;border:1px solid #d9e0e7;color:#1f2937">${value}</td>
+      </tr>`).join('');
+    const cc = datos.jefe_qa_email && datos.jefe_qa_email !== datos.email
+      ? [datos.jefe_qa_email]
+      : undefined;
     await this.mailService.send({
       to: datos.email,
-      subject: `[Ciclo QA] ${datos.proyecto_codigo} - ${ciclo.nombre}`,
-      html: `<p>Hola ${datos.nombre},</p><p>Has sido asignado/a como <strong>Responsable QA</strong> del ciclo <strong>${ciclo.nombre}</strong> del proyecto <strong>${datos.proyecto_codigo} - ${datos.proyecto_nombre}</strong>.</p>`,
+      cc,
+      subject: `[${titulo}] ${datos.proyecto_codigo} - ${ciclo.nombre}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1f2937">
+          <div style="background:${color};padding:22px 24px;border-radius:8px 8px 0 0">
+            <h2 style="color:#ffffff;margin:0;font-size:21px">${titulo}</h2>
+          </div>
+          <div style="background:#f8fafc;padding:26px 24px;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 8px 8px">
+            <p style="margin-top:0">Estimado/a <strong>${datos.nombre} ${datos.apellido}</strong>:</p>
+            <p>Por medio del presente, se informa que ha sido ${esReasignacion ? 'reasignado/a' : 'asignado/a'} como <strong>Responsable QA</strong> del siguiente ciclo de pruebas:</p>
+            <table style="width:100%;border-collapse:collapse;margin:18px 0">${tableRows}</table>
+            <div style="background:#eaf0f6;border-left:4px solid ${color};border-radius:0 6px 6px 0;padding:14px 16px;margin:18px 0;line-height:1.5">
+              <strong>Responsabilidad asignada:</strong> coordinar y ejecutar los casos incluidos en el ciclo, registrar las evidencias correspondientes y dar seguimiento a los defectos identificados.
+            </div>
+            <div style="margin:26px 0;text-align:center">
+              <a href="${linkCiclo}" style="background:${color};color:#ffffff;padding:12px 26px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Acceder al ciclo de pruebas</a>
+            </div>
+            <p style="font-size:13px;color:#64748b">Si el botón no funciona, copie y pegue este enlace en su navegador:<br><a href="${linkCiclo}" style="color:${color};word-break:break-all">${linkCiclo}</a></p>
+            <p>Atentamente,<br><strong>Equipo de Aseguramiento de Calidad</strong></p>
+            <hr style="margin:20px 0 12px;border:none;border-top:1px solid #d9e0e7">
+            <p style="color:#6b7280;font-size:12px;margin:0">Sistema QA — Notificación automática. Por favor, no responda este mensaje.</p>
+          </div>
+        </div>`,
     });
   }
 
