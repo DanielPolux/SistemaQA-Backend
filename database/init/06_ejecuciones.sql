@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS ejecuciones_caso_prueba (
   desarrollador_id   INTEGER     REFERENCES usuarios(id)               ON DELETE SET NULL,
   fecha              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ambiente           ambiente_ejecucion NOT NULL,
+  tipo_ejecucion     VARCHAR(20) NOT NULL DEFAULT 'Manual'
+                     CHECK (tipo_ejecucion IN ('Manual', 'Automatizada')),
   version            VARCHAR(50)        NOT NULL,
   resultado          resultado_ejecucion NOT NULL,
   resultado_obtenido TEXT               NOT NULL,

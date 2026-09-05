@@ -1,5 +1,5 @@
 import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
-import { AmbienteEjecucion, ResultadoEjecucion } from '../entities/ejecucion-caso-prueba.entity';
+import { AmbienteEjecucion, ResultadoEjecucion, TipoEjecucion } from '../entities/ejecucion-caso-prueba.entity';
 import { Type } from 'class-transformer';
 import { AmbienteDefecto, PrioridadDefecto, SeveridadDefecto } from '../../defectos/entities/defecto.entity';
 
@@ -42,6 +42,10 @@ export class CreateEjecucionDto {
 
   @IsEnum(AmbienteEjecucion)
   ambiente: AmbienteEjecucion;
+
+  @IsOptional()
+  @IsEnum(TipoEjecucion)
+  tipoEjecucion?: TipoEjecucion;
 
   @IsString()
   @IsNotEmpty()

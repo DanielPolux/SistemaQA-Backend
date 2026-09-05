@@ -26,6 +26,11 @@ export enum AmbienteEjecucion {
   PRODUCCION = 'Producción',
 }
 
+export enum TipoEjecucion {
+  MANUAL       = 'Manual',
+  AUTOMATIZADA = 'Automatizada',
+}
+
 @Entity('ejecuciones_caso_prueba')
 export class EjecucionCasoPrueba {
   @PrimaryGeneratedColumn()
@@ -67,6 +72,9 @@ export class EjecucionCasoPrueba {
 
   @Column({ type: 'enum', enum: AmbienteEjecucion })
   ambiente: AmbienteEjecucion;
+
+  @Column({ name: 'tipo_ejecucion', length: 20, default: TipoEjecucion.MANUAL })
+  tipoEjecucion: TipoEjecucion;
 
   @Column({ length: 50 })
   version: string;

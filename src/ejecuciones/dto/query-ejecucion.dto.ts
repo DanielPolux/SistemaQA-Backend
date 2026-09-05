@@ -19,6 +19,10 @@ export class QueryEjecucionDto {
   ambiente?: string;
 
   @IsOptional()
+  @IsString()
+  tipoEjecucion?: string;
+
+  @IsOptional()
   @Type(() => Number)
   testerId?: number;
 

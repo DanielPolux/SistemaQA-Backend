@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { EjecucionCasoPrueba, ResultadoEjecucion } from './entities/ejecucion-caso-prueba.entity';
+import { EjecucionCasoPrueba, ResultadoEjecucion, TipoEjecucion } from './entities/ejecucion-caso-prueba.entity';
 import { CicloPrueba, EstadoCiclo } from '../ciclos-prueba/entities/ciclo-prueba.entity';
 import { Defecto } from '../defectos/entities/defecto.entity';
 import { CreateEjecucionDto } from './dto/create-ejecucion.dto';
@@ -127,6 +127,22 @@ export class EjecucionesService {
 
   async create(dto: CreateEjecucionDto, reportadoPor: number, usuarioNombre: string | undefined, rol: Rol): Promise<EjecucionCasoPrueba & { defecto?: Defecto }> {
     await this.validarPrecondicionesEjecucion(dto.casoPruebaId, dto.proyectoId, dto.cicloId, reportadoPor, rol);
+
+    dto.tipoEjecucion ??= TipoEjecucion.MANUAL;
+    if (dto.tipoEjecucion === TipoEjecucion.AUTOMATIZADA) {
+      const certificaciones = await this.repo.count({
+        where: {
+          casoPruebaId: dto.casoPruebaId,
+          tipoEjecucion: TipoEjecucion.MANUAL,
+          resultado: ResultadoEjecucion.APROBADO,
+        },
+      });
+      if (certificaciones === 0) {
+        throw new BadRequestException(
+          'El caso debe contar con una ejecución manual aprobada antes de ejecutarse de forma automatizada.',
+        );
+      }
+    }
 
     const { defectoData, ...ejecucionFields } = dto;
     if (ejecucionFields.resultado === ResultadoEjecucion.BLOQUEADO) {
@@ -257,6 +273,7 @@ export class EjecucionesService {
     if (query.proyectoId)   qb.andWhere('e.proyectoId   = :pid',  { pid:  query.proyectoId });
     if (query.resultado)    qb.andWhere('e.resultado     = :res',  { res:  query.resultado });
     if (query.ambiente)     qb.andWhere('e.ambiente      = :amb',  { amb:  query.ambiente });
+    if (query.tipoEjecucion) qb.andWhere('e.tipoEjecucion = :tipo', { tipo: query.tipoEjecucion });
     if (query.testerId)     qb.andWhere('e.testerId      = :tid',  { tid:  query.testerId });
     if (query.fechaDesde)   qb.andWhere('e.creadoEn     >= :fdesde', { fdesde: query.fechaDesde });
     if (query.fechaHasta)   qb.andWhere('e.creadoEn     <= :fhasta', { fhasta: query.fechaHasta + 'T23:59:59' });
